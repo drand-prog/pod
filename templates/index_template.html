@@ -243,6 +243,37 @@ Chart.defaults.font.size = 11;
 Chart.defaults.color = PALETTE.ink;
 Chart.defaults.plugins.legend.labels.boxWidth = 12;
 
+// x-axis config for daily/weekly time-series charts: one tick per calendar
+// month, labeled M/D — exactly "M/1" for daily series (every month's 1st is
+// a real data point), or the first available label of that month for
+// coarser-cadence series (e.g. weekly retention, where the 1st itself isn't
+// a data point) rather than dropping the tick entirely.
+function monthTickScale(extra) {
+  return Object.assign({
+    afterBuildTicks: axis => {
+      const seen = new Set();
+      axis.ticks = axis.ticks.filter(t => {
+        const label = axis.getLabelForValue(t.value);
+        const d = new Date(label + 'T00:00:00Z');
+        const key = d.getUTCFullYear() + '-' + d.getUTCMonth();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    },
+    ticks: {
+      autoSkip: false,
+      maxRotation: 0,
+      callback: function(val) {
+        const label = this.getLabelForValue(val);
+        const d = new Date(label + 'T00:00:00Z');
+        return (d.getUTCMonth() + 1) + '/' + d.getUTCDate();
+      }
+    },
+    grid: { display: false }
+  }, extra || {});
+}
+
 document.getElementById('generated-at').textContent = DATA.generatedAt;
 document.getElementById('megaphone-period').textContent = '— ' + DATA.periods.megaphoneDaily;
 document.getElementById('youtube-period').textContent = '— ' + DATA.periods.youtube;
@@ -294,7 +325,7 @@ if (DATA.megaphoneSpotifyDefinitions && DATA.megaphoneSpotifyDefinitions.length)
     },
     options: {
       responsive:true, maintainAspectRatio:false,
-      scales: { x: {ticks:{maxTicksLimit:8}, grid:{display:false}}, y:{beginAtZero:true, grid:{color:PALETTE.grid}} },
+      scales: { x: monthTickScale(), y:{beginAtZero:true, grid:{color:PALETTE.grid}} },
       plugins:{legend:{position:'top', align:'end'}}
     }
   });
@@ -328,7 +359,7 @@ if (DATA.megaphoneSpotifyDefinitions && DATA.megaphoneSpotifyDefinitions.length)
   new Chart(document.getElementById('chart-spotify-streams'), {
     type:'line',
     data:{ labels: streams.map(d=>d.date), datasets:[{label:'Streams', data: streams.map(d=>d.streams), borderColor:PALETTE.spotify, backgroundColor:'rgba(29,185,84,0.08)', fill:true, pointRadius:0, borderWidth:1.6, tension:.15}]},
-    options:{ responsive:true, maintainAspectRatio:false, scales:{x:{ticks:{maxTicksLimit:8}, grid:{display:false}}, y:{beginAtZero:true, grid:{color:PALETTE.grid}}}, plugins:{legend:{display:false}} }
+    options:{ responsive:true, maintainAspectRatio:false, scales:{x:monthTickScale(), y:{beginAtZero:true, grid:{color:PALETTE.grid}}}, plugins:{legend:{display:false}} }
   });
 
   const eng = DATA.spotify.engagement;
@@ -341,7 +372,7 @@ if (DATA.megaphoneSpotifyDefinitions && DATA.megaphoneSpotifyDefinitions.length)
       ]
     },
     options:{ responsive:true, maintainAspectRatio:false,
-      scales:{ x:{ticks:{maxTicksLimit:8}, grid:{display:false}}, y:{beginAtZero:true, grid:{color:PALETTE.grid}, title:{display:true,text:'hours'}}, y1:{beginAtZero:true, position:'right', grid:{display:false}, title:{display:true,text:'followers'}} },
+      scales:{ x:monthTickScale(), y:{beginAtZero:true, grid:{color:PALETTE.grid}, title:{display:true,text:'hours'}}, y1:{beginAtZero:true, position:'right', grid:{display:false}, title:{display:true,text:'followers'}} },
       plugins:{legend:{position:'top', align:'end'}}
     }
   });
@@ -350,7 +381,7 @@ if (DATA.megaphoneSpotifyDefinitions && DATA.megaphoneSpotifyDefinitions.length)
   new Chart(document.getElementById('chart-spotify-retention'), {
     type:'line',
     data:{ labels: ret.map(d=>d.weekStart), datasets:[{label:'Retention %', data: ret.map(d=>d.retentionPct), borderColor:PALETTE.spotify, backgroundColor:'transparent', pointRadius:2, borderWidth:1.6, tension:.2}]},
-    options:{ responsive:true, maintainAspectRatio:false, scales:{x:{ticks:{maxTicksLimit:8}, grid:{display:false}}, y:{beginAtZero:true, max:100, grid:{color:PALETTE.grid}, ticks:{callback:v=>v+'%'}}}, plugins:{legend:{display:false}} }
+    options:{ responsive:true, maintainAspectRatio:false, scales:{x:monthTickScale(), y:{beginAtZero:true, max:100, grid:{color:PALETTE.grid}, ticks:{callback:v=>v+'%'}}}, plugins:{legend:{display:false}} }
   });
 
   const comp = DATA.spotify.completion;
@@ -375,7 +406,7 @@ if (DATA.megaphoneSpotifyDefinitions && DATA.megaphoneSpotifyDefinitions.length)
       {label:'New', data: seg.map(d=>d.new), borderColor: PALETTE.spotify, backgroundColor:'transparent', pointRadius:0, borderWidth:1.6, tension:.15},
       {label:'Returning', data: seg.map(d=>d.returning), borderColor: PALETTE.apple, backgroundColor:'transparent', pointRadius:0, borderWidth:1.6, tension:.15},
     ]},
-    options:{ responsive:true, maintainAspectRatio:false, scales:{x:{ticks:{maxTicksLimit:8}, grid:{display:false}}, y:{beginAtZero:true, grid:{color:PALETTE.grid}}}, plugins:{legend:{position:'top', align:'end'}} }
+    options:{ responsive:true, maintainAspectRatio:false, scales:{x:monthTickScale(), y:{beginAtZero:true, grid:{color:PALETTE.grid}}}, plugins:{legend:{position:'top', align:'end'}} }
   });
 
   const ag = DATA.spotify.ageGender;
@@ -508,7 +539,7 @@ if (DATA.megaphoneSpotifyDefinitions && DATA.megaphoneSpotifyDefinitions.length)
       {label:'Regular', data: yseg.map(d=>d.regular), backgroundColor:'#8a4f2b'},
     ]},
     options:{ responsive:true, maintainAspectRatio:false,
-      scales:{ x:{stacked:true, ticks:{maxTicksLimit:8}, grid:{display:false}}, y:{stacked:true, beginAtZero:true, grid:{color:PALETTE.grid}} },
+      scales:{ x:monthTickScale({stacked:true}), y:{stacked:true, beginAtZero:true, grid:{color:PALETTE.grid}} },
       plugins:{legend:{position:'top', align:'end'}}
     }
   });
@@ -517,7 +548,7 @@ if (DATA.megaphoneSpotifyDefinitions && DATA.megaphoneSpotifyDefinitions.length)
   new Chart(document.getElementById('chart-youtube-subscribers'), {
     type:'line',
     data:{ labels: subs.map(d=>d.date), datasets:[{label:'Subscribers', data: subs.map(d=>d.subscribers), borderColor: PALETTE.youtube, backgroundColor:'rgba(204,43,43,0.08)', fill:true, pointRadius:0, borderWidth:1.6, tension:.15}]},
-    options:{ responsive:true, maintainAspectRatio:false, scales:{x:{ticks:{maxTicksLimit:8}, grid:{display:false}}, y:{beginAtZero:true, grid:{color:PALETTE.grid}}}, plugins:{legend:{display:false}} }
+    options:{ responsive:true, maintainAspectRatio:false, scales:{x:monthTickScale(), y:{beginAtZero:true, grid:{color:PALETTE.grid}}}, plugins:{legend:{display:false}} }
   });
 })();
 
