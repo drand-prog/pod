@@ -18,7 +18,7 @@ Regenerates index.html from templates/index_template.html, replacing the
 import csv
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import openpyxl
@@ -102,15 +102,30 @@ def build_megaphone_daily():
     # Megaphone's export is sorted by Downloads descending, not by date — sort
     # chronologically or the daily trend chart plots dates out of order.
     rows = read_csv_rows(find_one("Megaphone_podcast-downloads-performance-*.csv"))
-    out = [
-        {
-            "date": parse_date(r["Date"]),
-            "downloads": int(r["Downloads"]),
-            "reach": int(r["Download reach"]),
-        }
+    by_date = {
+        parse_date(r["Date"]): {"downloads": int(r["Downloads"]), "reach": int(r["Download reach"])}
         for r in rows
-    ]
-    out.sort(key=lambda d: d["date"])
+    }
+
+    # Fill any missing calendar dates (e.g. a reporting gap between two
+    # separately-exported date ranges) with nulls rather than leaving them
+    # out entirely. The chart's x-axis is categorical — it spaces labels
+    # evenly regardless of the actual date deltas — so silently omitting
+    # gap dates would draw a continuous line straight across a real gap,
+    # implying data that doesn't exist. An explicit null date breaks the
+    # line there instead (Chart.js doesn't span gaps by default).
+    all_dates = sorted(by_date)
+    start = datetime.strptime(all_dates[0], "%Y-%m-%d")
+    end = datetime.strptime(all_dates[-1], "%Y-%m-%d")
+    out = []
+    d = start
+    while d <= end:
+        iso = d.strftime("%Y-%m-%d")
+        if iso in by_date:
+            out.append({"date": iso, **by_date[iso]})
+        else:
+            out.append({"date": iso, "downloads": None, "reach": None})
+        d += timedelta(days=1)
     return out
 
 
@@ -329,7 +344,7 @@ def main():
     tech_range = extract_date_range_from_filename(megaphone_tech_path)
     tech_start, tech_end = tech_range if tech_range else (daily_start, daily_end)
 
-    daily_tab_total = sum(d["downloads"] for d in megaphone_daily)
+    daily_tab_total = sum(d["downloads"] for d in megaphone_daily if d["downloads"] is not None)
     app_report_total = sum(a["downloads"] for a in megaphone_tech)
     apple_downloads = next((a["downloads"] for a in megaphone_tech if a["app"] == "Apple Podcasts"), None)
     spotify_downloads = next((a["downloads"] for a in megaphone_tech if a["app"] == "Spotify"), None)
@@ -345,6 +360,11 @@ def main():
         "youtube": "Jan 1 – Jul 14, 2026 (195 days)",  # still hand-maintained from the YouTube screenshot; not covered by this round's automation
         "megaphoneDaily": fmt_period(daily_start, daily_end),
         "megaphoneAppReport": fmt_period(tech_start, tech_end),
+        # Raw ISO end dates too, so the frontend can compute the gap between
+        # the two Megaphone reports itself rather than parsing it back out
+        # of the formatted strings above.
+        "megaphoneDailyEnd": daily_end,
+        "megaphoneAppReportEnd": tech_end,
     }
 
     platform_summary = build_platform_summary(wb)
@@ -432,7 +452,17 @@ def main():
             f"Plays ≠ downloads: Apple plays (~{fmt(apple_plays_header)}) exceed Megaphone's total downloads ({fmt(min(daily_tab_total, app_report_total))}–{fmt(max(daily_tab_total, app_report_total))}) because a play is a playback event (repeats included) while a download is one de-duplicated file request.",
             f"“Other platforms” residual uses Megaphone's own per-app DOWNLOAD figures, not native play counts: Megaphone total ({fmt(app_report_total)}) − Apple downloads ({fmt(apple_downloads)}) − Spotify downloads ({fmt(spotify_downloads)}) = {fmt(other_downloads)}. This is the only valid basis for that residual.",
             "Snapshots vs. trends: only Megaphone daily downloads, Spotify daily streams/engagement, and Spotify WoW retention are true time series. Apple and YouTube figures are single point-in-time snapshots, shown as KPI cards / rank bars — not fabricated trend lines.",
-            f"Two Megaphone totals differ slightly: the app (Technology) report totals {fmt(app_report_total)} through {fmt_month_day(tech_end)}, while the daily-downloads tab totals {fmt(daily_tab_total)} through {fmt_month_day(daily_end)} — one extra day plus rounding. The app-report total is used for the “Other” residual so it ties out internally.",
+            (
+                f"Two Megaphone totals differ: the app (Technology) report totals {fmt(app_report_total)} through "
+                f"{fmt_month_day(tech_end)}, while the daily-downloads tab totals {fmt(daily_tab_total)} through "
+                f"{fmt_month_day(daily_end)}"
+                + (
+                    " — one extra day plus rounding."
+                    if abs((datetime.strptime(daily_end, '%Y-%m-%d') - datetime.strptime(tech_end, '%Y-%m-%d')).days) <= 2
+                    else f", because the app report hasn't been refreshed as recently as the daily downloads."
+                )
+                + " The app-report total is used for the “Other” residual, which reflects the app report's period, not the daily tab's."
+            ),
         ],
         "sources": [
             "Apple Podcasts Connect — Listener analytics: podcasters.apple.com/support/5392-listener-analytics",

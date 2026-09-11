@@ -261,8 +261,16 @@ document.getElementById('sources-list').innerHTML = DATA.sources.map(s => `<li>$
     options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{grid:{color:PALETTE.grid}}, y:{grid:{display:false}}} }
   });
 
-  document.getElementById('megaphone-footnote').textContent =
-    `App report total ${fmt(DATA.megaphone.appReportTotal)} (through ${DATA.periods.megaphoneAppReport.split('–')[1].trim()}) vs. daily-tab total ${fmt(DATA.megaphone.dailyTabTotal)} (through ${DATA.periods.megaphoneDaily.split('–')[1].trim()}) — one extra day plus rounding; the app-report total is used for the "Other platforms" residual.`;
+  {
+    const dailyEnd = new Date(DATA.periods.megaphoneDailyEnd + 'T00:00:00Z');
+    const appEnd = new Date(DATA.periods.megaphoneAppReportEnd + 'T00:00:00Z');
+    const gapDays = Math.abs(Math.round((dailyEnd - appEnd) / 86400000));
+    const gapNote = gapDays <= 2
+      ? 'one extra day plus rounding'
+      : "the app report hasn't been refreshed as recently as the daily downloads";
+    document.getElementById('megaphone-footnote').textContent =
+      `App report total ${fmt(DATA.megaphone.appReportTotal)} (through ${DATA.periods.megaphoneAppReport.split('–')[1].trim()}) vs. daily-tab total ${fmt(DATA.megaphone.dailyTabTotal)} (through ${DATA.periods.megaphoneDaily.split('–')[1].trim()}) — ${gapNote}; the app-report total is used for the "Other platforms" residual, which reflects the app report's period, not the daily tab's.`;
+  }
 })();
 
 // ---------- Spotify ----------
