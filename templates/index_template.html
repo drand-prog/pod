@@ -146,7 +146,7 @@
       </div>
       <div class="chart-card">
         <h3>Episodes <span class="tag snapshot">snapshot</span></h3>
-        <div class="chart-sub">All 11 episodes, all-time · click a column header to sort</div>
+        <div class="chart-sub" id="apple-episodes-sub"></div>
         <div class="data-table-wrap"><table class="data-table" id="table-apple-episodes"></table></div>
       </div>
     </div>
@@ -325,6 +325,7 @@ document.getElementById('sources-list').innerHTML = DATA.sources.map(s => `<li>$
     options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{grid:{color:PALETTE.grid}}, y:{grid:{display:false}}} }
   });
 
+  document.getElementById('apple-episodes-sub').textContent = `All ${DATA.apple.episodes.length} episodes, all-time · click a column header to sort`;
   renderSortableTable('table-apple-episodes',
     [
       {key:'name', label:'Episode', align:'left'},
