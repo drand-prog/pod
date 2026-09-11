@@ -541,6 +541,21 @@ def main():
             row["spotify"] = spotify_downloads
             row["apple"] = apple_downloads
             row["other"] = other_downloads
+        if row["metric"] == "Reporting period":
+            # Same staleness problem as the row above, just undiscovered until
+            # now: this row is hand-transcribed free text, so refreshing
+            # Megaphone/YouTube data (which updates periods{} above and the
+            # section headers) silently left this table row on its original
+            # "Jan 1 - Jul 14, 2026" text. Derive it from periods{} instead so
+            # it can't drift from the section headers again.
+            row["spotify"] = periods["spotifyApple"]
+            row["apple"] = periods["spotifyApple"]
+            row["youtube"] = periods["youtube"]
+            row["notes"] = (
+                f"Spotify and Apple columns are all-time; YouTube is {periods['youtube']}; "
+                f"the Megaphone daily-downloads report covers {periods['megaphoneDaily']}. "
+                "Different periods — cross-platform totals are not strictly comparable."
+            )
 
     def metric(name, col):
         """Look up one Platform Summary cell by metric label + platform column.
