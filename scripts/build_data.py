@@ -171,7 +171,7 @@ def build_spotify_completion():
     return [
         {
             "title": r["Episode title"].strip(),
-            "completionPct": float(r["Completion rate (%)"]),
+            "completionPct": round(float(r["Completion rate (%)"]), 2),
             "publishDate": parse_date(r["Publish date"]),
         }
         for r in rows
@@ -179,7 +179,10 @@ def build_spotify_completion():
 
 
 def build_spotify_retention():
-    rows = read_csv_rows(RAW / "Spotify_TheMeltingPod_WeekOverWeekRetention_1-1-2026--7-15-2026.csv")
+    # Filename bakes in a date range that changes every refresh, same
+    # reason the Megaphone reports are looked up by glob instead of exact
+    # name — avoids another hardcoded-filename edit next time.
+    rows = read_csv_rows(find_one("Spotify_TheMeltingPod_WeekOverWeekRetention_*.csv"))
     out = [
         {"weekStart": parse_date(r["Week starting"]), "retentionPct": round(float(r["Retention rate (%)"]), 2)}
         for r in rows
@@ -271,6 +274,9 @@ def build_apple_top_cities(wb):
 
 
 def build_youtube_videos(wb):
+    # Videos-only (Shorts excluded — no fresh per-Short breakdown exists) and
+    # no per-video Subscribers figure in this export (dropped entirely,
+    # rather than shown as an unavailable placeholder for every row).
     rows = sheet_rows(wb, "YouTube Videos")
     header_idx = next(i for i, r in enumerate(rows) if r[0] == "Video title")
     videos = []
@@ -291,16 +297,14 @@ def build_youtube_videos(wb):
                 "viewsPct": r[3],
                 "watchTimeHours": r[4],
                 "watchTimePct": r[5],
-                "subscribers": r[6],
-                "subscribersPct": r[7],
-                "impressions": r[8],
-                "ctr": r[9],
+                "impressions": r[6],
+                "ctr": r[7],
             }
         )
     return {
         "videos": videos,
-        "sumOfRows": {"views": sum_row[2], "watchTimeHours": sum_row[4], "subscribers": sum_row[6], "impressions": sum_row[8]} if sum_row else None,
-        "channelTotal": {"views": total_row[2], "watchTimeHours": total_row[4], "subscribers": total_row[6], "impressions": total_row[8], "ctr": total_row[9]} if total_row else None,
+        "sumOfRows": {"views": sum_row[2], "watchTimeHours": sum_row[4], "impressions": sum_row[6]} if sum_row else None,
+        "channelTotal": {"views": total_row[2], "watchTimeHours": total_row[4], "impressions": total_row[6], "ctr": total_row[7]} if total_row else None,
     }
 
 
@@ -362,7 +366,10 @@ def main():
 
     periods = {
         "spotifyApple": "All-time",
-        "youtube": "Jan 1 – Jul 14, 2026 (195 days)",  # still hand-maintained from the YouTube screenshot; not covered by this round's automation
+        # Traffic Sources/Videos/Overview refreshed Sep 2026 (no exact day-count
+        # given by the export, unlike the original screenshot); the Funnel tab
+        # is not part of this refresh and still shows its own Jan 1-Jul 14 note.
+        "youtube": "Jan 1 – Sep 2026",
         "megaphoneDaily": fmt_period(daily_start, daily_end),
         "megaphoneAppReport": fmt_period(tech_start, tech_end),
         # Raw ISO end dates too, so the frontend can compute the gap between
@@ -443,9 +450,10 @@ def main():
                 # Not available as their own Platform Summary cells — only
                 # mentioned in that row's prose Notes column, so these two
                 # stay hand-maintained constants rather than a fragile
-                # regex over free text.
-                "ctr": 0.042,
-                "avgViewDuration": "4:05",
+                # regex over free text. Updated from the Sep 2026 Traffic
+                # Sources export's Total row (blended across all sources).
+                "ctr": 0.0372,
+                "avgViewDuration": "4:52",
             },
             **build_youtube_videos(wb),
             "trafficSources": build_youtube_traffic(wb),
@@ -478,10 +486,13 @@ def main():
         # Megaphone's dashboard has its own "Growth on Spotify" panel with
         # tooltip definitions distinct from (and not sourced from) any of
         # the platforms' own docs above — quoted verbatim per the project
-        # owner's screenshots (Sep 2026), not paraphrased, since "Plays"
-        # here is a different measurement from the Spotify Plays figure
-        # already in the Platform Summary (that one comes from Spotify's
-        # own dashboard) and conflating the two would misrepresent both.
+        # owner's screenshots (Sep 2026). Confirmed (not just inferred) to
+        # be a verbatim passthrough of Spotify's own "Performance" export:
+        # cross-checked day-by-day for Jan 1-Sep 11, 2026 — Plays matched
+        # 253/254 days exactly, Confirmed-reach-by-plays matched 254/254.
+        # Still a different figure from the Platform Summary's Spotify
+        # Plays row, though: that one is the all-time cumulative total
+        # (2,250), not this daily series for a specific window.
         "megaphoneSpotifyDefinitions": [
             {
                 "term": "Plays",

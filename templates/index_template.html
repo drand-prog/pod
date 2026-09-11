@@ -163,7 +163,7 @@
       </div>
       <div class="chart-card">
         <h3>Impressions → watch time funnel <span class="tag snapshot">snapshot</span></h3>
-        <div class="chart-sub">Impression-driven views only — a subset of total channel views</div>
+        <div class="chart-sub">Impression-driven views only — a subset of total channel views. Still from the Jan 1–Jul 14 export — not yet refreshed, so its Impressions figure won't match the KPI card above.</div>
         <div id="youtube-funnel"></div>
       </div>
     </div>
@@ -392,7 +392,6 @@ if (DATA.megaphoneSpotifyDefinitions && DATA.megaphoneSpotifyDefinitions.length)
       {key:'duration', label:'Duration'},
       {key:'views', label:'Views', numeric:true},
       {key:'watchTimeHours', label:'Watch time (h)', numeric:true, fmt:v=>fmt(v,1)},
-      {key:'subscribers', label:'Subscribers', numeric:true},
       {key:'impressions', label:'Impressions', numeric:true},
       {key:'ctr', label:'CTR', numeric:true, fmt:v=>fmtPct(v)},
     ],
