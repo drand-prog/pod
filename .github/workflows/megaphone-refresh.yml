@@ -1,20 +1,25 @@
 name: Refresh Megaphone data
 
-# Scheduled pull of Megaphone's downloads + technology-performance reports.
-# NOTE: scripts/fetch_megaphone.py currently raises NotImplementedError for
-# the actual report calls — see that file's docstring for why (the reporting
-# endpoints weren't reachable to confirm from the environment that wrote
-# this). This workflow is ready to go the moment that script is finished;
-# until then it will fail with a clear error rather than commit wrong data.
+# Pulls newly finalized days from Megaphone's Delivery Export (S3) and folds
+# them into data/raw/, then lets rebuild-dashboard.yml pick up the change.
+# Runs daily rather than monthly since Megaphone finalizes each day's export
+# by ~11am UTC and there's no reason to let a working pipeline sit idle for
+# weeks — see scripts/fetch_megaphone.py's docstring for how this works and
+# why it can only append forward (the export has no backfill).
 #
 # Required repo secrets (Settings -> Secrets and variables -> Actions):
-#   MEGAPHONE_API_TOKEN   - from Megaphone User Settings
-#   MEGAPHONE_NETWORK_ID  - the network ID that owns the podcast
-#   MEGAPHONE_PODCAST_ID  - optional; only needed if the network has more than one podcast
+#   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION
+#       - credentials for an IAM user/role scoped to READ ONLY on the export
+#         bucket (s3:GetObject + s3:ListBucket on that bucket alone) — see
+#         the README's Automation section for the exact policy shape.
+#   MEGAPHONE_S3_BUCKET
+#       - the bucket Megaphone was configured to write delivery exports to.
+# Optional:
+#   MEGAPHONE_S3_PREFIX - key prefix, if exports aren't at the bucket root.
 
 on:
   schedule:
-    - cron: "0 13 1 * *" # 1st of each month, 13:00 UTC
+    - cron: "30 12 * * *" # daily, after Megaphone finalizes the previous day (~11:00 UTC)
   workflow_dispatch: {}
 
 permissions:
@@ -31,13 +36,16 @@ jobs:
         with:
           python-version: "3.12"
 
-      - run: pip install openpyxl requests
+      - run: pip install openpyxl boto3
 
-      - name: Fetch latest Megaphone reports
+      - name: Pull new finalized days from S3
+        id: fetch
         env:
-          MEGAPHONE_API_TOKEN: ${{ secrets.MEGAPHONE_API_TOKEN }}
-          MEGAPHONE_NETWORK_ID: ${{ secrets.MEGAPHONE_NETWORK_ID }}
-          MEGAPHONE_PODCAST_ID: ${{ secrets.MEGAPHONE_PODCAST_ID }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          MEGAPHONE_S3_BUCKET: ${{ secrets.MEGAPHONE_S3_BUCKET }}
+          MEGAPHONE_S3_PREFIX: ${{ secrets.MEGAPHONE_S3_PREFIX }}
         run: python3 scripts/fetch_megaphone.py
 
       - run: python3 scripts/build_data.py
@@ -48,11 +56,13 @@ jobs:
           commit-message: "Refresh Megaphone data (automated)"
           title: "Automated Megaphone data refresh"
           body: |
-            Pulled from the Megaphone API by the scheduled `megaphone-refresh` workflow.
+            New finalized day(s) pulled from Megaphone's Delivery Export (S3) by the
+            scheduled `megaphone-refresh` workflow and folded into the existing
+            history — see the workflow run log for exactly which dates and counts.
 
-            Review the numbers before merging — this bumps the Megaphone downloads
-            trend, the by-app breakdown, and everything derived from them (the
-            "Other platforms" residual, the two totals-differ caveat, and the
-            Megaphone period labels).
+            Review before merging: this bumps the Megaphone downloads trend, the
+            by-app breakdown, and everything derived from them (the "Other
+            platforms" residual, the totals-differ caveat, and the Megaphone
+            period labels).
           branch: automated/megaphone-refresh
           delete-branch: true
