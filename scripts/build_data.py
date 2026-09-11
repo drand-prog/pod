@@ -269,6 +269,9 @@ def build_apple_top_cities(wb):
 
 
 def build_youtube_videos(wb):
+    # Videos-only (Shorts excluded — no fresh per-Short breakdown exists) and
+    # no per-video Subscribers figure in this export (dropped entirely,
+    # rather than shown as an unavailable placeholder for every row).
     rows = sheet_rows(wb, "YouTube Videos")
     header_idx = next(i for i, r in enumerate(rows) if r[0] == "Video title")
     videos = []
@@ -289,16 +292,14 @@ def build_youtube_videos(wb):
                 "viewsPct": r[3],
                 "watchTimeHours": r[4],
                 "watchTimePct": r[5],
-                "subscribers": r[6],
-                "subscribersPct": r[7],
-                "impressions": r[8],
-                "ctr": r[9],
+                "impressions": r[6],
+                "ctr": r[7],
             }
         )
     return {
         "videos": videos,
-        "sumOfRows": {"views": sum_row[2], "watchTimeHours": sum_row[4], "subscribers": sum_row[6], "impressions": sum_row[8]} if sum_row else None,
-        "channelTotal": {"views": total_row[2], "watchTimeHours": total_row[4], "subscribers": total_row[6], "impressions": total_row[8], "ctr": total_row[9]} if total_row else None,
+        "sumOfRows": {"views": sum_row[2], "watchTimeHours": sum_row[4], "impressions": sum_row[6]} if sum_row else None,
+        "channelTotal": {"views": total_row[2], "watchTimeHours": total_row[4], "impressions": total_row[6], "ctr": total_row[7]} if total_row else None,
     }
 
 
@@ -360,7 +361,10 @@ def main():
 
     periods = {
         "spotifyApple": "All-time",
-        "youtube": "Jan 1 – Jul 14, 2026 (195 days)",  # still hand-maintained from the YouTube screenshot; not covered by this round's automation
+        # Traffic Sources/Videos/Overview refreshed Sep 2026 (no exact day-count
+        # given by the export, unlike the original screenshot); the Funnel tab
+        # is not part of this refresh and still shows its own Jan 1-Jul 14 note.
+        "youtube": "Jan 1 – Sep 2026",
         "megaphoneDaily": fmt_period(daily_start, daily_end),
         "megaphoneAppReport": fmt_period(tech_start, tech_end),
         # Raw ISO end dates too, so the frontend can compute the gap between
@@ -441,9 +445,10 @@ def main():
                 # Not available as their own Platform Summary cells — only
                 # mentioned in that row's prose Notes column, so these two
                 # stay hand-maintained constants rather than a fragile
-                # regex over free text.
-                "ctr": 0.042,
-                "avgViewDuration": "4:05",
+                # regex over free text. Updated from the Sep 2026 Traffic
+                # Sources export's Total row (blended across all sources).
+                "ctr": 0.0372,
+                "avgViewDuration": "4:52",
             },
             **build_youtube_videos(wb),
             "trafficSources": build_youtube_traffic(wb),
