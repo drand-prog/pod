@@ -132,6 +132,26 @@
         <div class="chart-sub">% of the episode the average listener completed</div>
         <canvas id="chart-spotify-completion"></canvas>
       </div>
+      <div class="chart-card">
+        <h3>Plays per episode, since published <span class="tag snapshot">snapshot</span></h3>
+        <div class="chart-sub" id="spotify-episode-plays-sub"></div>
+        <canvas id="chart-spotify-episode-plays"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3>New vs. returning listeners <span class="tag">trend</span></h3>
+        <div class="chart-sub">Daily listener count by segment</div>
+        <canvas id="chart-spotify-audience-segments"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3>Listeners by age &amp; gender <span class="tag snapshot">snapshot</span></h3>
+        <div class="chart-sub" id="spotify-age-gender-sub"></div>
+        <canvas id="chart-spotify-age-gender"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3>Listeners by country <span class="tag snapshot">snapshot</span></h3>
+        <div class="chart-sub" id="spotify-geo-sub"></div>
+        <canvas id="chart-spotify-geo"></canvas>
+      </div>
     </div>
   </section>
 
@@ -165,6 +185,26 @@
         <h3>Impressions → watch time funnel <span class="tag snapshot">snapshot</span></h3>
         <div class="chart-sub">Impression-driven views only — a subset of total channel views. Still from the Jan 1–Jul 14 export — not yet refreshed, so its Impressions figure won't match the KPI card above.</div>
         <div id="youtube-funnel"></div>
+      </div>
+      <div class="chart-card">
+        <h3>Views by device <span class="tag snapshot">snapshot</span></h3>
+        <div class="chart-sub" id="youtube-device-sub"></div>
+        <canvas id="chart-youtube-device"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3>Views by country <span class="tag snapshot">snapshot</span></h3>
+        <div class="chart-sub" id="youtube-geo-sub"></div>
+        <canvas id="chart-youtube-geo"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3>New / casual / regular viewers <span class="tag">trend</span></h3>
+        <div class="chart-sub">28-day trailing viewer segments — stacked bands sum to total monthly audience</div>
+        <canvas id="chart-youtube-audience-segments"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3>Subscriber growth <span class="tag">trend</span></h3>
+        <div class="chart-sub">Cumulative subscriber count</div>
+        <canvas id="chart-youtube-subscribers"></canvas>
       </div>
     </div>
     <div class="platform-block">
@@ -319,6 +359,49 @@ if (DATA.megaphoneSpotifyDefinitions && DATA.megaphoneSpotifyDefinitions.length)
     data:{ labels: comp.map(d=>d.title.length>28?d.title.slice(0,27)+'…':d.title), datasets:[{label:'Completion %', data: comp.map(d=>d.completionPct), backgroundColor: PALETTE.spotify}]},
     options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{max:100, grid:{color:PALETTE.grid}, ticks:{callback:v=>v+'%'}}, y:{grid:{display:false}}} }
   });
+
+  const eplays = DATA.spotify.episodePlays;
+  document.getElementById('spotify-episode-plays-sub').textContent = `All ${eplays.length} episodes, as of ${DATA.periods.spotifyEpisodePlaysAsOf} — total plays accrued since each episode's own publish date, not a like-for-like comparison across episodes of different ages`;
+  new Chart(document.getElementById('chart-spotify-episode-plays'), {
+    type:'bar',
+    data:{ labels: eplays.map(d=>d.title.length>28?d.title.slice(0,27)+'…':d.title), datasets:[{label:'Plays', data: eplays.map(d=>d.plays), backgroundColor: PALETTE.spotify}]},
+    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{grid:{color:PALETTE.grid}}, y:{grid:{display:false}}} }
+  });
+
+  const seg = DATA.spotify.audienceSegments;
+  new Chart(document.getElementById('chart-spotify-audience-segments'), {
+    type:'line',
+    data:{ labels: seg.map(d=>d.date), datasets:[
+      {label:'New', data: seg.map(d=>d.new), borderColor: PALETTE.spotify, backgroundColor:'transparent', pointRadius:0, borderWidth:1.6, tension:.15},
+      {label:'Returning', data: seg.map(d=>d.returning), borderColor: PALETTE.apple, backgroundColor:'transparent', pointRadius:0, borderWidth:1.6, tension:.15},
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false, scales:{x:{ticks:{maxTicksLimit:8}, grid:{display:false}}, y:{beginAtZero:true, grid:{color:PALETTE.grid}}}, plugins:{legend:{position:'top', align:'end'}} }
+  });
+
+  const ag = DATA.spotify.ageGender;
+  document.getElementById('spotify-age-gender-sub').textContent = `Share of listeners with known demographics, by age bracket — ${DATA.periods.spotifyAgeGender}`;
+  new Chart(document.getElementById('chart-spotify-age-gender'), {
+    type:'bar',
+    data:{ labels: ag.map(d=>d.age), datasets:[
+      {label:'Male', data: ag.map(d=>d.malePct), backgroundColor:'#2b6ca3'},
+      {label:'Female', data: ag.map(d=>d.femalePct), backgroundColor:'#c2478a'},
+      {label:'Non-binary', data: ag.map(d=>d.nonbinaryPct), backgroundColor:'#8a4f2b'},
+      {label:'Not specified', data: ag.map(d=>d.notSpecifiedPct), backgroundColor:'#b7b3ac'},
+    ]},
+    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      scales:{ x:{stacked:true, max:100, grid:{color:PALETTE.grid}, ticks:{callback:v=>v+'%'}}, y:{stacked:true, grid:{display:false}} },
+      plugins:{legend:{position:'top', align:'end'}}
+    }
+  });
+
+  const sgeo = DATA.spotify.geo;
+  const sgeoTop = sgeo.slice(0,15);
+  document.getElementById('spotify-geo-sub').textContent = `Top ${sgeoTop.length} of ${sgeo.length} countries by % of all-time listeners, as of ${DATA.periods.spotifyGeoAsOf}`;
+  new Chart(document.getElementById('chart-spotify-geo'), {
+    type:'bar',
+    data:{ labels: sgeoTop.map(c=>c.country), datasets:[{label:'% of listeners', data: sgeoTop.map(c=>c.pct), backgroundColor: PALETTE.spotify}]},
+    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{grid:{color:PALETTE.grid}, ticks:{callback:v=>v+'%'}}, y:{grid:{display:false}}} }
+  });
 })();
 
 // ---------- Apple ----------
@@ -397,6 +480,45 @@ if (DATA.megaphoneSpotifyDefinitions && DATA.megaphoneSpotifyDefinitions.length)
     ],
     DATA.youtube.videos, 'views', 'desc'
   );
+
+  const dev = DATA.youtube.deviceType;
+  const devSumViews = dev.devices.reduce((s,d)=>s+d.views,0);
+  document.getElementById('youtube-device-sub').textContent = `${fmt(devSumViews)} of ${fmt(dev.total.views)} total views, as of ${DATA.periods.youtubeDeviceAsOf}`;
+  new Chart(document.getElementById('chart-youtube-device'), {
+    type:'bar',
+    data:{ labels: dev.devices.map(d=>d.device), datasets:[{label:'Views', data: dev.devices.map(d=>d.views), backgroundColor: PALETTE.youtube}]},
+    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{grid:{color:PALETTE.grid}}, y:{grid:{display:false}}} }
+  });
+
+  const ygeo = DATA.youtube.geo;
+  const ygeoNonzero = ygeo.countries.filter(c=>c.views>0);
+  document.getElementById('youtube-geo-sub').textContent = `${ygeoNonzero.length} of ${fmt(ygeo.total.views)} total views broken out by country, as of ${DATA.periods.youtubeGeoAsOf} — the rest falls below YouTube's per-country reporting threshold`;
+  new Chart(document.getElementById('chart-youtube-geo'), {
+    type:'bar',
+    data:{ labels: ygeoNonzero.map(c=>c.country), datasets:[{label:'Views', data: ygeoNonzero.map(c=>c.views), backgroundColor: PALETTE.youtube}]},
+    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{grid:{color:PALETTE.grid}}, y:{grid:{display:false}}} }
+  });
+
+  const yseg = DATA.youtube.audienceSegments;
+  new Chart(document.getElementById('chart-youtube-audience-segments'), {
+    type:'bar',
+    data:{ labels: yseg.map(d=>d.date), datasets:[
+      {label:'New', data: yseg.map(d=>d.new), backgroundColor:'#CC2B2B'},
+      {label:'Casual', data: yseg.map(d=>d.casual), backgroundColor:'#e8a33d'},
+      {label:'Regular', data: yseg.map(d=>d.regular), backgroundColor:'#8a4f2b'},
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      scales:{ x:{stacked:true, ticks:{maxTicksLimit:8}, grid:{display:false}}, y:{stacked:true, beginAtZero:true, grid:{color:PALETTE.grid}} },
+      plugins:{legend:{position:'top', align:'end'}}
+    }
+  });
+
+  const subs = DATA.youtube.subscribersDaily;
+  new Chart(document.getElementById('chart-youtube-subscribers'), {
+    type:'line',
+    data:{ labels: subs.map(d=>d.date), datasets:[{label:'Subscribers', data: subs.map(d=>d.subscribers), borderColor: PALETTE.youtube, backgroundColor:'rgba(204,43,43,0.08)', fill:true, pointRadius:0, borderWidth:1.6, tension:.15}]},
+    options:{ responsive:true, maintainAspectRatio:false, scales:{x:{ticks:{maxTicksLimit:8}, grid:{display:false}}, y:{beginAtZero:true, grid:{color:PALETTE.grid}}}, plugins:{legend:{display:false}} }
+  });
 })();
 
 // ---------- generic sortable table ----------
