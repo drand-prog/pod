@@ -470,6 +470,31 @@ def main():
             "YouTube Help — Impressions & CTR / key metrics: support.google.com/youtube",
             "IAB Tech Lab Podcast Measurement — Megaphone certification (v2.2): compliance.iabtechnologylab.com",
         ],
+        # Megaphone's dashboard has its own "Growth on Spotify" panel with
+        # tooltip definitions distinct from (and not sourced from) any of
+        # the platforms' own docs above — quoted verbatim per the project
+        # owner's screenshots (Sep 2026), not paraphrased, since "Plays"
+        # here is a different measurement from the Spotify Plays figure
+        # already in the Platform Summary (that one comes from Spotify's
+        # own dashboard) and conflating the two would misrepresent both.
+        "megaphoneSpotifyDefinitions": [
+            {
+                "term": "Plays",
+                "definition": "The number of times any episode of this show was watched or listened to for at least 30 seconds on Spotify during the selected time period.",
+            },
+            {
+                "term": "Confirmed reach by plays",
+                "definition": "The number of distinct people who actively watched or listened to any episode of your podcast on Spotify.",
+            },
+            {
+                "term": "Downloads",
+                "definition": "The total number of downloads for all episodes for this podcast across all platforms.",
+            },
+            {
+                "term": "Downloads reach",
+                "definition": "The total number of households, or IP addresses, that downloaded an episode of your podcast.",
+            },
+        ],
     }
 
     template = TEMPLATE_PATH.read_text(encoding="utf-8")

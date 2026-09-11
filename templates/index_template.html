@@ -179,6 +179,10 @@
   <footer class="site">
     <div>Metric definitions are each platform's own wording (not standardized across platforms):</div>
     <ul id="sources-list"></ul>
+    <div id="megaphone-spotify-defs-wrap" hidden>
+      <div style="margin-top:14px">Megaphone dashboard — "Growth on Spotify" panel tooltips, quoted verbatim:</div>
+      <ul id="megaphone-spotify-defs-list"></ul>
+    </div>
   </footer>
 </div>
 
@@ -206,6 +210,11 @@ document.getElementById('youtube-period').textContent = '— ' + DATA.periods.yo
 // ---------- caveats ----------
 document.getElementById('caveats-list').innerHTML = DATA.caveats.map(c => `<li>${c}</li>`).join('');
 document.getElementById('sources-list').innerHTML = DATA.sources.map(s => `<li>${s}</li>`).join('');
+if (DATA.megaphoneSpotifyDefinitions && DATA.megaphoneSpotifyDefinitions.length) {
+  document.getElementById('megaphone-spotify-defs-wrap').hidden = false;
+  document.getElementById('megaphone-spotify-defs-list').innerHTML =
+    DATA.megaphoneSpotifyDefinitions.map(d => `<li><strong>${d.term}</strong> — "${d.definition}"</li>`).join('');
+}
 
 // ---------- platform summary table ----------
 (function renderSummary(){
