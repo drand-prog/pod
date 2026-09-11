@@ -318,7 +318,7 @@ document.getElementById('sources-list').innerHTML = DATA.sources.map(s => `<li>$
 
   const tc = DATA.apple.topCities;
   const top15 = tc.cities.slice(0,15);
-  document.getElementById('apple-cities-sub').textContent = `Top ${top15.length} of ${tc.cities.length} listed cities · ${fmt(tc.allCitiesTotal)} total listeners` + (tc.listTruncated ? ' (list truncated in source screenshot — does not sum to the total)' : '');
+  document.getElementById('apple-cities-sub').textContent = `Top ${top15.length} of ${tc.cities.length} listed cities · ${fmt(tc.allCitiesTotal)} total listeners` + (tc.note ? ` (${tc.note})` : '');
   new Chart(document.getElementById('chart-apple-cities'), {
     type:'bar',
     data:{ labels: top15.map(c=>c.city), datasets:[{label:'Listeners', data: top15.map(c=>c.listeners), backgroundColor: PALETTE.apple}]},
