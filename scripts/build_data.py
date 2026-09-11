@@ -47,8 +47,10 @@ def read_csv_rows(path):
 
 
 def build_megaphone_daily():
+    # Megaphone's export is sorted by Downloads descending, not by date — sort
+    # chronologically or the daily trend chart plots dates out of order.
     rows = read_csv_rows(RAW / "Megaphone_podcast-downloads-performance-2026-01-01-2026-07-15.csv")
-    return [
+    out = [
         {
             "date": parse_date(r["Date"]),
             "downloads": int(r["Downloads"]),
@@ -56,6 +58,8 @@ def build_megaphone_daily():
         }
         for r in rows
     ]
+    out.sort(key=lambda d: d["date"])
+    return out
 
 
 def build_megaphone_technology():
@@ -71,7 +75,9 @@ def build_megaphone_technology():
 
 def build_spotify_streams():
     rows = read_csv_rows(RAW / "Spotify_TheMeltingPod_Streams_all-time.csv")
-    return [{"date": parse_date(r["Date"]), "streams": int(r["Streams"])} for r in rows]
+    out = [{"date": parse_date(r["Date"]), "streams": int(r["Streams"])} for r in rows]
+    out.sort(key=lambda d: d["date"])
+    return out
 
 
 def build_spotify_engagement():
@@ -88,6 +94,7 @@ def build_spotify_engagement():
                 "followers": int(followers) if followers else None,
             }
         )
+    out.sort(key=lambda d: d["date"])
     return out
 
 
@@ -105,10 +112,12 @@ def build_spotify_completion():
 
 def build_spotify_retention():
     rows = read_csv_rows(RAW / "Spotify_TheMeltingPod_WeekOverWeekRetention_1-1-2026--7-15-2026.csv")
-    return [
+    out = [
         {"weekStart": parse_date(r["Week starting"]), "retentionPct": round(float(r["Retention rate (%)"]), 2)}
         for r in rows
     ]
+    out.sort(key=lambda d: d["weekStart"])
+    return out
 
 
 def sheet_rows(wb, name):
