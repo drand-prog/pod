@@ -171,7 +171,7 @@ def build_spotify_completion():
     return [
         {
             "title": r["Episode title"].strip(),
-            "completionPct": float(r["Completion rate (%)"]),
+            "completionPct": round(float(r["Completion rate (%)"]), 2),
             "publishDate": parse_date(r["Publish date"]),
         }
         for r in rows
@@ -179,7 +179,10 @@ def build_spotify_completion():
 
 
 def build_spotify_retention():
-    rows = read_csv_rows(RAW / "Spotify_TheMeltingPod_WeekOverWeekRetention_1-1-2026--7-15-2026.csv")
+    # Filename bakes in a date range that changes every refresh, same
+    # reason the Megaphone reports are looked up by glob instead of exact
+    # name — avoids another hardcoded-filename edit next time.
+    rows = read_csv_rows(find_one("Spotify_TheMeltingPod_WeekOverWeekRetention_*.csv"))
     out = [
         {"weekStart": parse_date(r["Week starting"]), "retentionPct": round(float(r["Retention rate (%)"]), 2)}
         for r in rows
