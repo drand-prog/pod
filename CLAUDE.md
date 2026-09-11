@@ -52,7 +52,12 @@ Manifest (only labeled values were transcribed — never numbers read off line/b
 - Spotify **Plays** (standard effective 11 Jun 2026) = an episode "watched or listened to for at least thirty seconds."
 - YouTube **Views** = times a video was watched (unique + repeat); **Watch time** = total hours watched; **Impressions** = thumbnail shows; **CTR** = share of impressions that led to a view; **Average view duration** = watch time ÷ views.
 - Megaphone/IAB **Download** = "a unique file request that was downloaded" (complete or partial), de-duplicated by IP + user agent within 24h.
-Sources: podcasters.apple.com/support/5392-listener-analytics ; newsroom.spotify.com (11 Jun 2026) ; support.google.com/youtube ; IAB Tech Lab Podcast Measurement (Megaphone certification).
+- Megaphone dashboard, "Growth on Spotify" panel — tooltips, quoted verbatim (confirmed Sep 2026):
+  - **Plays** = "The number of times any episode of this show was watched or listened to for at least 30 seconds on Spotify during the selected time period." (This is Spotify-specific — a different measurement pipeline from the Downloads figure below, not a subset of it or a duplicate of the Platform Summary's Spotify Plays figure, which comes from Spotify's own dashboard rather than Megaphone's. The two need not match.)
+  - **Confirmed reach by plays** = "The number of distinct people who actively watched or listened to any episode of your podcast on Spotify."
+  - **Downloads** = "The total number of downloads for all episodes for this podcast across all platforms." (Includes Spotify's downloads, same figure the Megaphone Technology tab breaks out by app.)
+  - **Downloads reach** = "The total number of households, or IP addresses, that downloaded an episode of your podcast." (Confirms the interpretation already used for the "Download reach" column in the daily downloads CSV and for aggregating the S3 delivery export in `scripts/fetch_megaphone.py` — unique households/IPs, not additive across days.)
+Sources: podcasters.apple.com/support/5392-listener-analytics ; newsroom.spotify.com (11 Jun 2026) ; support.google.com/youtube ; IAB Tech Lab Podcast Measurement (Megaphone certification) ; Megaphone dashboard UI tooltips (Growth on Spotify panel, screenshotted by the project owner Sep 2026).
 
 ## Critical caveats — surface these on the dashboard, do NOT smooth them away
 1. **Different units, not interchangeable:** Megaphone counts *downloads*, Apple/Spotify count *plays*, Spotify separately reports *streams*, YouTube counts *views*. Do not sum or directly compare across these as if identical.
