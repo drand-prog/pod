@@ -73,6 +73,12 @@ def extract_date_range_from_filename(path):
     return None
 
 
+def extract_asof_date_from_filename(path):
+    """Pull the last YYYY-MM-DD date out of a filename (single-date "as of" exports)."""
+    found = re.findall(r"\d{4}-\d{2}-\d{2}", path.stem)
+    return found[-1] if found else None
+
+
 def read_csv_rows(path):
     with open(path, newline="", encoding="utf-8-sig") as f:
         return list(csv.DictReader(f))
@@ -188,6 +194,141 @@ def build_spotify_retention():
         for r in rows
     ]
     out.sort(key=lambda d: d["weekStart"])
+    return out
+
+
+def build_spotify_age_gender():
+    # Percentages are already 0-100 (not 0-1 fractions) and each row's Total
+    # is the sum of its own Male/Female/Non-binary/Not-specified columns —
+    # confirmed for every row, so the frontend can render this as one
+    # stacked bar per age bracket without recomputing a total.
+    path = find_one("Spotify_TheMeltingPod_AgeByGender_*.csv")
+    rows = read_csv_rows(path)
+    out = [
+        {
+            "age": r["Age"].strip(),
+            "totalPct": round(float(r["Total percentage"]), 2),
+            "malePct": round(float(r["Male percentage"]), 2),
+            "femalePct": round(float(r["Female percentage"]), 2),
+            "nonbinaryPct": round(float(r["Non-binary percentage"]), 2),
+            "notSpecifiedPct": round(float(r["Not specified percentage"]), 2),
+        }
+        for r in rows
+    ]
+    return out, extract_date_range_from_filename(path)
+
+
+def build_spotify_audience_segments():
+    path = find_one("Spotify_TheMeltingPod_AudienceSegments_*.csv")
+    rows = read_csv_rows(path)
+    out = [
+        {
+            "date": parse_date(r["Date"]),
+            "total": int(r["Total"]),
+            "returning": int(r["Returning"]),
+            "new": int(r["New"]),
+        }
+        for r in rows
+    ]
+    out.sort(key=lambda d: d["date"])
+    return out
+
+
+def build_spotify_episode_plays():
+    path = find_one("Spotify_TheMeltingPod_EpisodePlaysSincePublished_*.csv")
+    rows = read_csv_rows(path)
+    out = [
+        {
+            "title": r["Episode name"].strip(),
+            "publishDate": parse_date(r["Publish date"]),
+            "plays": int(r["Plays"]),
+        }
+        for r in rows
+    ]
+    out.sort(key=lambda d: d["plays"], reverse=True)
+    return out, extract_asof_date_from_filename(path)
+
+
+def build_spotify_geo():
+    # Percentage is already 0-100, of all-time listeners by country (sums to
+    # ~100 across the full list) — same shape as Apple's Top Cities panel,
+    # just percentage-based instead of raw listener counts.
+    path = find_one("Spotify_TheMeltingPod_GeoLocation_*.csv")
+    rows = read_csv_rows(path)
+    out = [{"country": r["Geo"].strip(), "pct": round(float(r["Percentage"]), 2)} for r in rows]
+    out.sort(key=lambda d: d["pct"], reverse=True)
+    return out, extract_asof_date_from_filename(path)
+
+
+def build_youtube_device_type():
+    path = find_one("YouTube_TheMeltingPod_DeviceType_*.csv")
+    rows = read_csv_rows(path)
+    total_row = None
+    devices = []
+    for r in rows:
+        entry = {
+            "device": r["Device type"].strip(),
+            "views": int(r["Views"]),
+            "watchTimeHours": float(r["Watch time (hours)"]),
+            "avgPctViewed": round(float(r["Average percentage viewed (%)"]), 2),
+        }
+        if entry["device"] == "Total":
+            total_row = entry
+        else:
+            devices.append(entry)
+    return {"devices": devices, "total": total_row}, extract_asof_date_from_filename(path)
+
+
+def build_youtube_geography():
+    # YouTube's own export, not a screenshot — but still only breaks out a
+    # handful of countries (small channel; likely below its per-country
+    # reporting threshold for the rest), so the listed rows don't sum to the
+    # Total the way Apple's truncated-screenshot cities don't either.
+    path = find_one("YouTube_TheMeltingPod_Geography_*.csv")
+    rows = read_csv_rows(path)
+    total_row = None
+    countries = []
+    for r in rows:
+        entry = {
+            "country": r["Geography"].strip(),
+            "views": int(r["Views"]),
+            "avgViewDuration": r["Average view duration"].strip() or None,
+            "watchTimeHours": float(r["Watch time (hours)"]),
+        }
+        if entry["country"] == "Total":
+            total_row = entry
+        else:
+            countries.append(entry)
+    countries.sort(key=lambda d: d["views"], reverse=True)
+    return {"countries": countries, "total": total_row}, extract_asof_date_from_filename(path)
+
+
+def build_youtube_audience_segments():
+    # 28-day new/casual/regular viewer counts. Verified these three columns
+    # sum exactly to the separate "Monthly audience" export for all 192
+    # overlapping days — that file is a pure redundant total, so it isn't
+    # read at all; this stacked series already reconstructs it as the sum
+    # of the three bands.
+    path = find_one("YouTube_TheMeltingPod_NewCasualRegularViewers_*.csv")
+    rows = read_csv_rows(path)
+    out = [
+        {
+            "date": parse_date(r["Date"]),
+            "new": int(r["28-day new viewers"]),
+            "casual": int(r["28-day casual viewers"]),
+            "regular": int(r["28-day regular viewers"]),
+        }
+        for r in rows
+    ]
+    out.sort(key=lambda d: d["date"])
+    return out
+
+
+def build_youtube_subscribers_daily():
+    path = find_one("YouTube_TheMeltingPod_SubscribersDaily_*.csv")
+    rows = read_csv_rows(path)
+    out = [{"date": parse_date(r["Date"]), "subscribers": int(r["Subscribers"])} for r in rows]
+    out.sort(key=lambda d: d["date"])
     return out
 
 
@@ -359,6 +500,12 @@ def main():
         )
     other_downloads = app_report_total - apple_downloads - spotify_downloads
 
+    spotify_age_gender, age_gender_range = build_spotify_age_gender()
+    spotify_episode_plays, episode_plays_asof = build_spotify_episode_plays()
+    spotify_geo, spotify_geo_asof = build_spotify_geo()
+    youtube_device, youtube_device_asof = build_youtube_device_type()
+    youtube_geo, youtube_geo_asof = build_youtube_geography()
+
     periods = {
         "spotifyApple": "All-time",
         # Traffic Sources/Videos/Overview refreshed Sep 2026 (no exact day-count
@@ -372,6 +519,11 @@ def main():
         # of the formatted strings above.
         "megaphoneDailyEnd": daily_end,
         "megaphoneAppReportEnd": tech_end,
+        "spotifyAgeGender": fmt_period(*age_gender_range) if age_gender_range else "All-time",
+        "spotifyEpisodePlaysAsOf": fmt_month_day(episode_plays_asof) if episode_plays_asof else None,
+        "spotifyGeoAsOf": fmt_month_day(spotify_geo_asof) if spotify_geo_asof else None,
+        "youtubeDeviceAsOf": fmt_month_day(youtube_device_asof) if youtube_device_asof else None,
+        "youtubeGeoAsOf": fmt_month_day(youtube_geo_asof) if youtube_geo_asof else None,
     }
 
     platform_summary = build_platform_summary(wb)
@@ -422,6 +574,10 @@ def main():
             "engagement": build_spotify_engagement(),
             "completion": build_spotify_completion(),
             "wowRetention": build_spotify_retention(),
+            "ageGender": spotify_age_gender,
+            "audienceSegments": build_spotify_audience_segments(),
+            "episodePlays": spotify_episode_plays,
+            "geo": spotify_geo,
         },
         "apple": {
             "overview": {
@@ -453,6 +609,10 @@ def main():
             **build_youtube_videos(wb),
             "trafficSources": build_youtube_traffic(wb),
             "funnel": build_youtube_funnel(wb),
+            "deviceType": youtube_device,
+            "geo": youtube_geo,
+            "audienceSegments": build_youtube_audience_segments(),
+            "subscribersDaily": build_youtube_subscribers_daily(),
         },
         "caveats": [
             "Different units, not interchangeable: Megaphone counts downloads, Apple/Spotify count plays, Spotify separately reports streams, YouTube counts views. These are not summed or directly compared as if identical.",
@@ -471,6 +631,7 @@ def main():
                 )
                 + " The app-report total is used for the “Other” residual, which reflects the app report's period, not the daily tab's."
             ),
+            f"YouTube's country breakdown only lists {len(youtube_geo['countries'])} countries totaling {fmt(sum(c['views'] for c in youtube_geo['countries']))} views, against a channel total of {fmt(youtube_geo['total']['views'] if youtube_geo['total'] else 0)} — YouTube Studio doesn't break out the long tail below its per-country reporting threshold, so the list is shown as-is rather than padded to 100%.",
         ],
         "sources": [
             "Apple Podcasts Connect — Listener analytics: podcasters.apple.com/support/5392-listener-analytics",
