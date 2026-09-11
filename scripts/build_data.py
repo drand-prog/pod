@@ -473,10 +473,13 @@ def main():
         # Megaphone's dashboard has its own "Growth on Spotify" panel with
         # tooltip definitions distinct from (and not sourced from) any of
         # the platforms' own docs above — quoted verbatim per the project
-        # owner's screenshots (Sep 2026), not paraphrased, since "Plays"
-        # here is a different measurement from the Spotify Plays figure
-        # already in the Platform Summary (that one comes from Spotify's
-        # own dashboard) and conflating the two would misrepresent both.
+        # owner's screenshots (Sep 2026). Confirmed (not just inferred) to
+        # be a verbatim passthrough of Spotify's own "Performance" export:
+        # cross-checked day-by-day for Jan 1-Sep 11, 2026 — Plays matched
+        # 253/254 days exactly, Confirmed-reach-by-plays matched 254/254.
+        # Still a different figure from the Platform Summary's Spotify
+        # Plays row, though: that one is the all-time cumulative total
+        # (2,250), not this daily series for a specific window.
         "megaphoneSpotifyDefinitions": [
             {
                 "term": "Plays",
