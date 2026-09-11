@@ -209,10 +209,8 @@ def build_apple_episodes(wb):
     rows = sheet_rows(wb, "Apple Episodes")
     header_idx = next(i for i, r in enumerate(rows) if r[0] == "Number")
     episodes = []
-    sum_plays = None
     for r in rows[header_idx + 1 :]:
         if str(r[0]).startswith("Sum of listed"):
-            sum_plays = r[6]
             continue
         episodes.append(
             {
@@ -226,6 +224,12 @@ def build_apple_episodes(wb):
                 "avgConsumption": r[7],
             }
         )
+    # Computed from the episode rows rather than read from the sheet's own
+    # SUM() cell: openpyxl doesn't evaluate formulas, only cached values, so
+    # a formula cell edited programmatically (as opposed to by Excel/Sheets)
+    # reads back as None. Summing here is correct regardless of how the
+    # workbook was last saved.
+    sum_plays = sum(ep["plays"] for ep in episodes)
     return {"episodes": episodes, "sumOfListedPlays": sum_plays}
 
 
@@ -354,7 +358,21 @@ def main():
             row["apple"] = apple_downloads
             row["other"] = other_downloads
 
-    apple_plays_header = 10400  # from the Apple overview screenshot; not automated this round
+    def metric(name, col):
+        """Look up one Platform Summary cell by metric label + platform column.
+
+        The Apple/YouTube overview KPI cards mirror figures that already live
+        in the Platform Summary sheet (screenshot-transcribed, same as
+        everything else on that tab) — reading them from there instead of a
+        separate set of hardcoded constants means updating the workbook is
+        enough; there's no second copy of these numbers to remember to edit.
+        """
+        for row in platform_summary:
+            if row["metric"].strip() == name:
+                return row[col]
+        raise RuntimeError(f"Platform Summary has no {name!r} row")
+
+    apple_plays_header = metric("Plays / Streams / Views", "apple")
 
     data = {
         "generatedAt": datetime.utcnow().strftime("%Y-%m-%d"),
@@ -380,23 +398,27 @@ def main():
         },
         "apple": {
             "overview": {
-                "followers": 487,
-                "listeners": 587,
-                "engagedListeners": 409,
+                "followers": metric("Followers / Subscribers", "apple"),
+                "listeners": metric("Listeners (unique)", "apple"),
+                "engagedListeners": metric("Engaged listeners", "apple"),
                 "playsHeader": apple_plays_header,
-                "timeListenedHours": 1217,
-                "timeListenedFollowing": 930,
-                "timeListenedNotFollowing": 287,
+                "timeListenedHours": metric("Listen / Watch time (hours)", "apple"),
+                "timeListenedFollowing": metric("— of which Following (Apple)", "apple"),
+                "timeListenedNotFollowing": metric("— of which Not following (Apple)", "apple"),
             },
             **build_apple_episodes(wb),
             "topCities": build_apple_top_cities(wb),
         },
         "youtube": {
             "overview": {
-                "views": 7543,
-                "watchTimeHours": 241.5,
-                "subscribersNet": 178,
-                "impressions": 17427,
+                "views": metric("Plays / Streams / Views", "youtube"),
+                "watchTimeHours": metric("Listen / Watch time (hours)", "youtube"),
+                "subscribersNet": metric("Followers / Subscribers", "youtube"),
+                "impressions": metric("Impressions", "youtube"),
+                # Not available as their own Platform Summary cells — only
+                # mentioned in that row's prose Notes column, so these two
+                # stay hand-maintained constants rather than a fragile
+                # regex over free text.
                 "ctr": 0.042,
                 "avgViewDuration": "4:05",
             },
