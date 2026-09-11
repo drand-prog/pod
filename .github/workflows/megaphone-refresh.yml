@@ -1,0 +1,58 @@
+name: Refresh Megaphone data
+
+# Scheduled pull of Megaphone's downloads + technology-performance reports.
+# NOTE: scripts/fetch_megaphone.py currently raises NotImplementedError for
+# the actual report calls — see that file's docstring for why (the reporting
+# endpoints weren't reachable to confirm from the environment that wrote
+# this). This workflow is ready to go the moment that script is finished;
+# until then it will fail with a clear error rather than commit wrong data.
+#
+# Required repo secrets (Settings -> Secrets and variables -> Actions):
+#   MEGAPHONE_API_TOKEN   - from Megaphone User Settings
+#   MEGAPHONE_NETWORK_ID  - the network ID that owns the podcast
+#   MEGAPHONE_PODCAST_ID  - optional; only needed if the network has more than one podcast
+
+on:
+  schedule:
+    - cron: "0 13 1 * *" # 1st of each month, 13:00 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install openpyxl requests
+
+      - name: Fetch latest Megaphone reports
+        env:
+          MEGAPHONE_API_TOKEN: ${{ secrets.MEGAPHONE_API_TOKEN }}
+          MEGAPHONE_NETWORK_ID: ${{ secrets.MEGAPHONE_NETWORK_ID }}
+          MEGAPHONE_PODCAST_ID: ${{ secrets.MEGAPHONE_PODCAST_ID }}
+        run: python3 scripts/fetch_megaphone.py
+
+      - run: python3 scripts/build_data.py
+
+      - name: Open PR with refreshed data
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "Refresh Megaphone data (automated)"
+          title: "Automated Megaphone data refresh"
+          body: |
+            Pulled from the Megaphone API by the scheduled `megaphone-refresh` workflow.
+
+            Review the numbers before merging — this bumps the Megaphone downloads
+            trend, the by-app breakdown, and everything derived from them (the
+            "Other platforms" residual, the two totals-differ caveat, and the
+            Megaphone period labels).
+          branch: automated/megaphone-refresh
+          delete-branch: true

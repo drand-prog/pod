@@ -41,15 +41,67 @@ def parse_date(s):
     raise ValueError(f"Unrecognized date format: {s!r}")
 
 
+def fmt(n):
+    return f"{n:,}"
+
+
+def fmt_month_day(iso):
+    d = datetime.strptime(iso, "%Y-%m-%d")
+    return f"{d.strftime('%b')} {d.day}"
+
+
+def fmt_period(start_iso, end_iso):
+    start = datetime.strptime(start_iso, "%Y-%m-%d")
+    end = datetime.strptime(end_iso, "%Y-%m-%d")
+    if start.year == end.year:
+        return f"{fmt_month_day(start_iso)} – {fmt_month_day(end_iso)}, {end.year}"
+    return f"{fmt_month_day(start_iso)}, {start.year} – {fmt_month_day(end_iso)}, {end.year}"
+
+
+def extract_date_range_from_filename(path):
+    """Best-effort: pull the two YYYY-MM-DD dates out of a report filename.
+
+    Megaphone's exports bake the report's date range into the filename
+    (e.g. "...-2026-01-01-2026-07-15.csv" or "..._2026-01-01_-_2026-07-16_.csv").
+    A refreshed export is expected to follow the same convention with new
+    dates; if a future export doesn't, callers fall back to another source
+    of the range rather than failing the whole build.
+    """
+    found = re.findall(r"\d{4}-\d{2}-\d{2}", path.stem)
+    if len(found) == 2:
+        return found[0], found[1]
+    return None
+
+
 def read_csv_rows(path):
     with open(path, newline="", encoding="utf-8-sig") as f:
         return list(csv.DictReader(f))
 
 
+def find_one(pattern):
+    """Locate a raw CSV by glob pattern instead of an exact filename.
+
+    Megaphone's exported filenames bake in the report's date range
+    (…-2026-01-01-2026-07-15.csv), which changes every refresh — including
+    an automated one that writes a new file rather than overwriting the old.
+    Glob so build_data.py doesn't need editing each month, and fail loudly
+    if the refresh left more than one match lying around.
+    """
+    matches = sorted(RAW.glob(pattern))
+    if not matches:
+        raise FileNotFoundError(f"No file in {RAW} matches {pattern!r}")
+    if len(matches) > 1:
+        raise RuntimeError(
+            f"Multiple files match {pattern!r}: {[m.name for m in matches]} — "
+            "remove the stale one(s) before rebuilding."
+        )
+    return matches[0]
+
+
 def build_megaphone_daily():
     # Megaphone's export is sorted by Downloads descending, not by date — sort
     # chronologically or the daily trend chart plots dates out of order.
-    rows = read_csv_rows(RAW / "Megaphone_podcast-downloads-performance-2026-01-01-2026-07-15.csv")
+    rows = read_csv_rows(find_one("Megaphone_podcast-downloads-performance-*.csv"))
     out = [
         {
             "date": parse_date(r["Date"]),
@@ -63,14 +115,15 @@ def build_megaphone_daily():
 
 
 def build_megaphone_technology():
-    rows = read_csv_rows(RAW / "Technology_Performance__2026-01-01_-_2026-07-16_.csv")
+    path = find_one("Technology_Performance*.csv")
+    rows = read_csv_rows(path)
     out = []
     for r in rows:
         app = r["APPLICATION"].strip()
         downloads = int(r["DOWNLOADS"].replace(",", ""))
         pct = float(r["% OF TOTAL"].strip().rstrip("%")) / 100.0
         out.append({"app": app, "downloads": downloads, "pct": pct})
-    return out
+    return out, path
 
 
 def build_spotify_streams():
@@ -259,25 +312,64 @@ def build_youtube_funnel(wb):
 def main():
     wb = openpyxl.load_workbook(XLSX_PATH, data_only=True)
 
+    # Megaphone is the one source this pipeline can refresh automatically
+    # (scripts/fetch_megaphone.py), so its totals, period labels, and the
+    # cross-platform "Other platforms" residual are all derived from the
+    # current CSVs here rather than hardcoded — otherwise an automated
+    # refresh would silently leave stale numbers in the KPI strip and
+    # caveats text even though the underlying data/raw/ files were current.
+    megaphone_daily = build_megaphone_daily()
+    megaphone_tech, megaphone_tech_path = build_megaphone_technology()
+
+    daily_start, daily_end = megaphone_daily[0]["date"], megaphone_daily[-1]["date"]
+    tech_range = extract_date_range_from_filename(megaphone_tech_path)
+    tech_start, tech_end = tech_range if tech_range else (daily_start, daily_end)
+
+    daily_tab_total = sum(d["downloads"] for d in megaphone_daily)
+    app_report_total = sum(a["downloads"] for a in megaphone_tech)
+    apple_downloads = next((a["downloads"] for a in megaphone_tech if a["app"] == "Apple Podcasts"), None)
+    spotify_downloads = next((a["downloads"] for a in megaphone_tech if a["app"] == "Spotify"), None)
+    if apple_downloads is None or spotify_downloads is None:
+        raise RuntimeError(
+            "Technology Performance report has no 'Apple Podcasts' or 'Spotify' row — "
+            "can't compute the 'Other platforms' residual. Check the raw CSV."
+        )
+    other_downloads = app_report_total - apple_downloads - spotify_downloads
+
+    periods = {
+        "spotifyApple": "All-time",
+        "youtube": "Jan 1 – Jul 14, 2026 (195 days)",  # still hand-maintained from the YouTube screenshot; not covered by this round's automation
+        "megaphoneDaily": fmt_period(daily_start, daily_end),
+        "megaphoneAppReport": fmt_period(tech_start, tech_end),
+    }
+
+    platform_summary = build_platform_summary(wb)
+    for row in platform_summary:
+        if row["metric"] == "Downloads by app (Megaphone, IAB)":
+            # Megaphone's own per-app download report is the authoritative
+            # source for this row (see the "Other platforms" caveat below) —
+            # override whatever was last hand-transcribed into the workbook
+            # so this row always matches the fresh CSVs.
+            row["spotify"] = spotify_downloads
+            row["apple"] = apple_downloads
+            row["other"] = other_downloads
+
+    apple_plays_header = 10400  # from the Apple overview screenshot; not automated this round
+
     data = {
         "generatedAt": datetime.utcnow().strftime("%Y-%m-%d"),
-        "periods": {
-            "spotifyApple": "All-time",
-            "youtube": "Jan 1 – Jul 14, 2026 (195 days)",
-            "megaphoneDaily": "Jan 1 – Jul 15, 2026",
-            "megaphoneAppReport": "Jan 1 – Jul 16, 2026",
-        },
-        "platformSummary": build_platform_summary(wb),
+        "periods": periods,
+        "platformSummary": platform_summary,
         "megaphone": {
-            "daily": build_megaphone_daily(),
-            "byApp": build_megaphone_technology(),
-            "appReportTotal": 9632,
-            "dailyTabTotal": 9585,
+            "daily": megaphone_daily,
+            "byApp": megaphone_tech,
+            "appReportTotal": app_report_total,
+            "dailyTabTotal": daily_tab_total,
             "otherResidual": {
-                "total": 9632,
-                "apple": 6200,
-                "spotify": 1003,
-                "other": 2429,
+                "total": app_report_total,
+                "apple": apple_downloads,
+                "spotify": spotify_downloads,
+                "other": other_downloads,
             },
         },
         "spotify": {
@@ -291,7 +383,7 @@ def main():
                 "followers": 487,
                 "listeners": 587,
                 "engagedListeners": 409,
-                "playsHeader": 10400,
+                "playsHeader": apple_plays_header,
                 "timeListenedHours": 1217,
                 "timeListenedFollowing": 930,
                 "timeListenedNotFollowing": 287,
@@ -314,11 +406,11 @@ def main():
         },
         "caveats": [
             "Different units, not interchangeable: Megaphone counts downloads, Apple/Spotify count plays, Spotify separately reports streams, YouTube counts views. These are not summed or directly compared as if identical.",
-            "Different time windows: Spotify & Apple figures are all-time; YouTube is Jan 1–Jul 14, 2026; Megaphone covers Jan 1–Jul 15/16, 2026. Periods are labeled throughout — no shared window is implied.",
-            "Plays ≠ downloads: Apple plays (~10,400) exceed Megaphone's total downloads (9,585–9,632) because a play is a playback event (repeats included) while a download is one de-duplicated file request.",
-            "“Other platforms” residual uses Megaphone's own per-app DOWNLOAD figures, not native play counts: Megaphone total (9,632) − Apple downloads (6,200) − Spotify downloads (1,003) = 2,429. This is the only valid basis for that residual.",
+            f"Different time windows: Spotify & Apple figures are all-time; YouTube is {periods['youtube']}; Megaphone's daily-downloads tab covers {periods['megaphoneDaily']} and its app (Technology) report covers {periods['megaphoneAppReport']}. Periods are labeled throughout — no shared window is implied.",
+            f"Plays ≠ downloads: Apple plays (~{fmt(apple_plays_header)}) exceed Megaphone's total downloads ({fmt(min(daily_tab_total, app_report_total))}–{fmt(max(daily_tab_total, app_report_total))}) because a play is a playback event (repeats included) while a download is one de-duplicated file request.",
+            f"“Other platforms” residual uses Megaphone's own per-app DOWNLOAD figures, not native play counts: Megaphone total ({fmt(app_report_total)}) − Apple downloads ({fmt(apple_downloads)}) − Spotify downloads ({fmt(spotify_downloads)}) = {fmt(other_downloads)}. This is the only valid basis for that residual.",
             "Snapshots vs. trends: only Megaphone daily downloads, Spotify daily streams/engagement, and Spotify WoW retention are true time series. Apple and YouTube figures are single point-in-time snapshots, shown as KPI cards / rank bars — not fabricated trend lines.",
-            "Two Megaphone totals differ slightly: the app (Technology) report totals 9,632 through Jul 16, while the daily-downloads tab totals 9,585 through Jul 15 — one extra day plus rounding. The app-report total is used for the “Other” residual so it ties out internally.",
+            f"Two Megaphone totals differ slightly: the app (Technology) report totals {fmt(app_report_total)} through {fmt_month_day(tech_end)}, while the daily-downloads tab totals {fmt(daily_tab_total)} through {fmt_month_day(daily_end)} — one extra day plus rounding. The app-report total is used for the “Other” residual so it ties out internally.",
         ],
         "sources": [
             "Apple Podcasts Connect — Listener analytics: podcasters.apple.com/support/5392-listener-analytics",

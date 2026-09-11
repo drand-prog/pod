@@ -1,0 +1,42 @@
+name: Rebuild dashboard on data change
+
+# Whenever new source data lands on a branch (a manual Apple/Spotify CSV
+# drop, an updated consolidated workbook, or an automated Megaphone refresh),
+# regenerate index.html and commit it back to that same branch. This removes
+# "remember to run scripts/build_data.py" from the monthly refresh — drop the
+# files, push, and the dashboard rebuilds itself.
+
+on:
+  push:
+    paths:
+      - "data/raw/**"
+      - "data/consolidated/**"
+      - "templates/**"
+      - "vendor/**"
+      - "scripts/build_data.py"
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install openpyxl
+
+      - run: python3 scripts/build_data.py
+
+      - name: Commit regenerated index.html
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Regenerate index.html from updated data [skip ci]"
+          file_pattern: index.html
