@@ -687,6 +687,25 @@ def main():
                 "definition": "The total number of households, or IP addresses, that downloaded an episode of your podcast.",
             },
         ],
+        # External referral events the project owner identified as likely
+        # drivers of visible anomalies in the trend charts above — recorded
+        # here (not inferred/guessed) so a reader hitting one of these spikes
+        # doesn't mistake it for a data error. Kept to two verified cases;
+        # each note describes only what's actually visible in the data,
+        # without overstating a same-day match that isn't there (the Aug 29
+        # case is a days-delayed uptick, not an immediate spike).
+        "notableEvents": [
+            {
+                "date": "2026-05-24",
+                "description": "Doug appeared on The Bulwark's YouTube channel. Megaphone downloads jumped from a ~20/day baseline to 354 on May 26, and YouTube subscribers rose from 48 to 164 (net +116) over the following week.",
+                "url": "https://www.youtube.com/watch?v=D0Q7Y_1n3-g",
+            },
+            {
+                "date": "2026-08-29",
+                "description": "The Bulwark published an article referencing the show. No same-day spike, but Megaphone downloads rose to 263 on Sep 4 (vs. a ~30-50/day baseline) — a smaller, days-delayed uptick rather than an immediate jump.",
+                "url": "https://www.thebulwark.com/p/trump-said-hed-target-illegal-immigration",
+            },
+        ],
     }
 
     template = TEMPLATE_PATH.read_text(encoding="utf-8")

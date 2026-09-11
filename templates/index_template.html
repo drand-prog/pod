@@ -223,6 +223,10 @@
       <div style="margin-top:14px">Megaphone dashboard — "Growth on Spotify" panel tooltips, quoted verbatim:</div>
       <ul id="megaphone-spotify-defs-list"></ul>
     </div>
+    <div id="notable-events-wrap" hidden>
+      <div style="margin-top:14px">Notable external events behind visible spikes in the trend charts above:</div>
+      <ul id="notable-events-list"></ul>
+    </div>
   </footer>
 </div>
 
@@ -285,6 +289,14 @@ if (DATA.megaphoneSpotifyDefinitions && DATA.megaphoneSpotifyDefinitions.length)
   document.getElementById('megaphone-spotify-defs-wrap').hidden = false;
   document.getElementById('megaphone-spotify-defs-list').innerHTML =
     DATA.megaphoneSpotifyDefinitions.map(d => `<li><strong>${d.term}</strong> — "${d.definition}"</li>`).join('');
+}
+if (DATA.notableEvents && DATA.notableEvents.length) {
+  document.getElementById('notable-events-wrap').hidden = false;
+  document.getElementById('notable-events-list').innerHTML =
+    DATA.notableEvents.map(e => {
+      const dateStr = new Date(e.date + 'T00:00:00Z').toLocaleDateString('en-US', {month:'long', day:'numeric', year:'numeric', timeZone:'UTC'});
+      return `<li><strong>${dateStr}</strong> — ${e.description} <a href="${e.url}" target="_blank" rel="noopener">source</a></li>`;
+    }).join('');
 }
 
 // ---------- platform summary table ----------
