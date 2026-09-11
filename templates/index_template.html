@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Melting Pod — Analytics Dashboard</title>
+<script>/*__CHARTJS_LIB__*/</script>
+<style>
+  :root{
+    --bg:#f7f7f5; --panel:#ffffff; --ink:#1c1b1a; --ink-soft:#5b5854;
+    --border:#e4e1db; --accent:#8a4f2b; --accent-soft:#f1e4d8;
+    --warn-bg:#fff6e0; --warn-border:#e8c765; --warn-ink:#6b5410;
+    --spotify:#1DB954; --apple:#A2AAAD; --youtube:#FF0000; --megaphone:#3D5A80; --other:#B08968;
+    --good:#2e7d32; --shadow:0 1px 2px rgba(0,0,0,.05), 0 1px 12px rgba(0,0,0,.04);
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; padding:0 16px 64px; background:var(--bg); color:var(--ink);
+    font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  .wrap{max-width:1180px; margin:0 auto}
+  header.top{padding:28px 0 8px}
+  header.top h1{margin:0 0 4px; font-size:1.7rem; letter-spacing:-.01em}
+  header.top .sub{color:var(--ink-soft); font-size:.92rem}
+  .caveats{
+    background:var(--warn-bg); border:1px solid var(--warn-border); border-radius:10px;
+    padding:14px 18px; margin:18px 0 24px; color:var(--warn-ink);
+  }
+  .caveats summary{cursor:pointer; font-weight:600; font-size:.95rem; list-style:none}
+  .caveats summary::-webkit-details-marker{display:none}
+  .caveats summary::before{content:"⚠ "; }
+  .caveats ul{margin:10px 0 2px; padding-left:20px}
+  .caveats li{margin:6px 0; font-size:.87rem}
+  section{margin:34px 0}
+  section > h2{
+    font-size:1.15rem; margin:0 0 4px; padding-bottom:8px; border-bottom:2px solid var(--border);
+    display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;
+  }
+  section > h2 .period{font-weight:400; font-size:.8rem; color:var(--ink-soft)}
+  .platform-dot{display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px}
+  .kpi-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; margin-top:16px}
+  .kpi-card{
+    background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:14px 16px;
+    box-shadow:var(--shadow);
+  }
+  .kpi-card .label{font-size:.76rem; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.03em}
+  .kpi-card .value{font-size:1.5rem; font-weight:700; margin-top:2px}
+  .kpi-card .value.na{color:var(--ink-soft); font-weight:400; font-size:1.1rem}
+  .kpi-card .note{font-size:.74rem; color:var(--ink-soft); margin-top:4px}
+  table.summary-table{width:100%; border-collapse:collapse; background:var(--panel); border:1px solid var(--border); border-radius:12px; overflow:hidden; box-shadow:var(--shadow); font-size:.86rem}
+  table.summary-table th, table.summary-table td{padding:9px 12px; text-align:right; border-bottom:1px solid var(--border); vertical-align:top}
+  table.summary-table th:first-child, table.summary-table td:first-child{text-align:left; font-weight:600}
+  table.summary-table thead th{background:var(--accent-soft); font-size:.78rem; text-transform:uppercase; letter-spacing:.02em}
+  table.summary-table tbody tr:last-child td{border-bottom:none}
+  table.summary-table td.na{color:var(--ink-soft)}
+  .footnote{font-size:.78rem; color:var(--ink-soft); margin-top:8px}
+  .panel-grid{display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:start}
+  @media (max-width:800px){ .panel-grid{grid-template-columns:1fr} }
+  .chart-card{background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:16px; box-shadow:var(--shadow)}
+  .chart-card h3{margin:0 0 2px; font-size:.95rem}
+  .chart-card .chart-sub{font-size:.76rem; color:var(--ink-soft); margin-bottom:10px}
+  .chart-card canvas{max-height:280px}
+  .data-table-wrap{overflow-x:auto; background:var(--panel); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow)}
+  table.data-table{width:100%; border-collapse:collapse; font-size:.82rem; min-width:600px}
+  table.data-table th, table.data-table td{padding:8px 10px; text-align:right; border-bottom:1px solid var(--border); white-space:nowrap}
+  table.data-table th:first-child, table.data-table td:first-child{text-align:left; white-space:normal; min-width:180px}
+  table.data-table thead th{background:var(--accent-soft); position:sticky; top:0; cursor:pointer; user-select:none}
+  table.data-table thead th:hover{background:#e9d8c2}
+  table.data-table tbody tr:hover{background:#faf8f5}
+  .sort-arrow{font-size:.7em; opacity:.6}
+  .platform-block{margin-top:14px}
+  footer.site{margin-top:48px; padding-top:18px; border-top:1px solid var(--border); font-size:.78rem; color:var(--ink-soft)}
+  footer.site ul{padding-left:18px}
+  .tag{display:inline-block; font-size:.68rem; padding:2px 7px; border-radius:99px; background:var(--accent-soft); color:var(--accent); font-weight:600; margin-left:6px; vertical-align:middle}
+  .tag.snapshot{background:#eee; color:#555}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>The Melting Pod — Cross-Platform Analytics</h1>
+    <div class="sub">Consolidated from Megaphone, Spotify, Apple Podcasts Connect, and YouTube Studio · generated <span id="generated-at"></span></div>
+  </header>
+
+  <details class="caveats" open>
+    <summary>Read before comparing numbers across platforms</summary>
+    <ul id="caveats-list"></ul>
+  </details>
+
+  <section id="summary">
+    <h2>Platform Summary <span class="period">— see per-row periods below; platforms are not on a shared time window</span></h2>
+    <div id="summary-table-wrap"></div>
+  </section>
+
+  <section id="megaphone">
+    <h2><span class="platform-dot" style="background:var(--megaphone)"></span>Megaphone (downloads) <span class="period" id="megaphone-period"></span></h2>
+    <div class="panel-grid">
+      <div class="chart-card">
+        <h3>Daily downloads <span class="tag">trend</span></h3>
+        <div class="chart-sub">Downloads + download reach, per day</div>
+        <canvas id="chart-megaphone-daily"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3>Downloads by listening app</h3>
+        <div class="chart-sub">Top apps; long tail grouped. Source for the cross-platform “Other” residual.</div>
+        <canvas id="chart-megaphone-byapp"></canvas>
+      </div>
+    </div>
+    <p class="footnote" id="megaphone-footnote"></p>
+  </section>
+
+  <section id="spotify">
+    <h2><span class="platform-dot" style="background:var(--spotify)"></span>Spotify <span class="period">— all-time</span></h2>
+    <div class="panel-grid">
+      <div class="chart-card">
+        <h3>Daily streams <span class="tag">trend</span></h3>
+        <div class="chart-sub">A stream = an episode watched/listened to for ≥30 seconds (standard effective 11 Jun 2026)</div>
+        <canvas id="chart-spotify-streams"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3>Engagement <span class="tag">trend</span></h3>
+        <div class="chart-sub">Daily consumption hours (bars) vs. cumulative followers (line)</div>
+        <canvas id="chart-spotify-engagement"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3>Week-over-week retention <span class="tag">trend</span></h3>
+        <div class="chart-sub">Share of listeners of one episode who came back for the next, by week</div>
+        <canvas id="chart-spotify-retention"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3>Per-episode completion rate <span class="tag snapshot">snapshot</span></h3>
+        <div class="chart-sub">% of the episode the average listener completed</div>
+        <canvas id="chart-spotify-completion"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <section id="apple">
+    <h2><span class="platform-dot" style="background:var(--apple)"></span>Apple Podcasts <span class="period">— all-time</span></h2>
+    <div class="kpi-grid" id="apple-kpis"></div>
+    <div class="platform-block panel-grid">
+      <div class="chart-card">
+        <h3>Listeners by city <span class="tag snapshot">snapshot</span></h3>
+        <div class="chart-sub" id="apple-cities-sub"></div>
+        <canvas id="chart-apple-cities"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3>Episodes <span class="tag snapshot">snapshot</span></h3>
+        <div class="chart-sub">All 11 episodes, all-time · click a column header to sort</div>
+        <div class="data-table-wrap"><table class="data-table" id="table-apple-episodes"></table></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="youtube">
+    <h2><span class="platform-dot" style="background:var(--youtube)"></span>YouTube <span class="period" id="youtube-period"></span></h2>
+    <div class="kpi-grid" id="youtube-kpis"></div>
+    <div class="platform-block panel-grid">
+      <div class="chart-card">
+        <h3>Traffic sources <span class="tag snapshot">snapshot</span></h3>
+        <div class="chart-sub">Views by discovery surface</div>
+        <canvas id="chart-youtube-traffic"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3>Impressions → watch time funnel <span class="tag snapshot">snapshot</span></h3>
+        <div class="chart-sub">Impression-driven views only — a subset of total channel views</div>
+        <div id="youtube-funnel"></div>
+      </div>
+    </div>
+    <div class="platform-block">
+      <div class="chart-card">
+        <h3>Per-video performance <span class="tag snapshot">snapshot</span></h3>
+        <div class="chart-sub">All videos in the period · click a column header to sort</div>
+        <div class="data-table-wrap"><table class="data-table" id="table-youtube-videos"></table></div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="site">
+    <div>Metric definitions are each platform's own wording (not standardized across platforms):</div>
+    <ul id="sources-list"></ul>
+  </footer>
+</div>
+
+<script>
+const DATA = /*__DASHBOARD_DATA__*/;
+
+// ---------- helpers ----------
+const fmt = (n, d=0) => (n===null || n===undefined || n==='—') ? '—' : Number(n).toLocaleString(undefined,{maximumFractionDigits:d, minimumFractionDigits:d});
+const fmtPct = (n, d=1) => (n===null || n===undefined || n==='—') ? '—' : (Number(n)*100).toFixed(d) + '%';
+const naOr = (v, formatter=fmt) => (v===null || v===undefined || v==='—') ? '<span class="na">—</span>' : formatter(v);
+
+const PALETTE = {
+  megaphone: '#3D5A80', spotify: '#1DB954', apple: '#8a4f2b', other: '#B08968', youtube: '#CC2B2B',
+  grid: 'rgba(0,0,0,0.06)', ink: '#5b5854'
+};
+Chart.defaults.font.family = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+Chart.defaults.font.size = 11;
+Chart.defaults.color = PALETTE.ink;
+Chart.defaults.plugins.legend.labels.boxWidth = 12;
+
+document.getElementById('generated-at').textContent = DATA.generatedAt;
+document.getElementById('megaphone-period').textContent = '— ' + DATA.periods.megaphoneDaily;
+document.getElementById('youtube-period').textContent = '— ' + DATA.periods.youtube;
+
+// ---------- caveats ----------
+document.getElementById('caveats-list').innerHTML = DATA.caveats.map(c => `<li>${c}</li>`).join('');
+document.getElementById('sources-list').innerHTML = DATA.sources.map(s => `<li>${s}</li>`).join('');
+
+// ---------- platform summary table ----------
+(function renderSummary(){
+  const cols = [
+    {key:'spotify', label:'Spotify', color:PALETTE.spotify},
+    {key:'apple', label:'Apple Podcasts', color:PALETTE.apple},
+    {key:'other', label:'Other platforms', color:PALETTE.other},
+    {key:'youtube', label:'YouTube', color:PALETTE.youtube},
+  ];
+  let html = '<table class="summary-table"><thead><tr><th>Metric</th>';
+  cols.forEach(c => html += `<th><span class="platform-dot" style="background:${c.color}"></span>${c.label}</th>`);
+  html += '</tr></thead><tbody>';
+  DATA.platformSummary.forEach(row => {
+    html += `<tr title="${(row.notes||'').replace(/"/g,'&quot;')}"><td>${row.metric}</td>`;
+    cols.forEach(c => {
+      const v = row[c.key];
+      html += `<td class="${v==='—'?'na':''}">${v==='—'||v===null?'—':(typeof v==='number' ? fmt(v, (v!==Math.round(v))?1:0) : v)}</td>`;
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  html += `<p class="footnote">Hover a row for its full definition and source. "Other platforms" downloads = Megaphone total (${fmt(DATA.megaphone.otherResidual.total)}) − Apple downloads (${fmt(DATA.megaphone.otherResidual.apple)}) − Spotify downloads (${fmt(DATA.megaphone.otherResidual.spotify)}) = <strong>${fmt(DATA.megaphone.otherResidual.other)}</strong>. This uses Megaphone's own per-app download counts, not native play counts.</p>`;
+  document.getElementById('summary-table-wrap').innerHTML = html;
+})();
+
+// ---------- Megaphone ----------
+(function renderMegaphone(){
+  const daily = DATA.megaphone.daily;
+  new Chart(document.getElementById('chart-megaphone-daily'), {
+    type: 'line',
+    data: {
+      labels: daily.map(d=>d.date),
+      datasets: [
+        {label:'Downloads', data: daily.map(d=>d.downloads), borderColor: PALETTE.megaphone, backgroundColor:'transparent', pointRadius:0, borderWidth:1.6, tension:.15},
+        {label:'Download reach', data: daily.map(d=>d.reach), borderColor: PALETTE.other, backgroundColor:'transparent', pointRadius:0, borderWidth:1.2, borderDash:[3,3], tension:.15},
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      scales: { x: {ticks:{maxTicksLimit:8}, grid:{display:false}}, y:{beginAtZero:true, grid:{color:PALETTE.grid}} },
+      plugins:{legend:{position:'top', align:'end'}}
+    }
+  });
+
+  const byApp = DATA.megaphone.byApp.filter(a => a.app !== 'Total');
+  const top = byApp.slice(0, 8);
+  const restSum = byApp.slice(8).reduce((s,a)=>s+a.downloads,0);
+  const labels = top.map(a=>a.app).concat(restSum>0 ? ['All other apps'] : []);
+  const values = top.map(a=>a.downloads).concat(restSum>0 ? [restSum] : []);
+  new Chart(document.getElementById('chart-megaphone-byapp'), {
+    type:'bar',
+    data:{ labels, datasets:[{label:'Downloads', data: values, backgroundColor: labels.map((l,i)=> l==='Apple Podcasts'?PALETTE.apple : l==='Spotify'?PALETTE.spotify : PALETTE.other)}]},
+    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{grid:{color:PALETTE.grid}}, y:{grid:{display:false}}} }
+  });
+
+  document.getElementById('megaphone-footnote').textContent =
+    `App report total ${fmt(DATA.megaphone.appReportTotal)} (through ${DATA.periods.megaphoneAppReport.split('–')[1].trim()}) vs. daily-tab total ${fmt(DATA.megaphone.dailyTabTotal)} (through ${DATA.periods.megaphoneDaily.split('–')[1].trim()}) — one extra day plus rounding; the app-report total is used for the "Other platforms" residual.`;
+})();
+
+// ---------- Spotify ----------
+(function renderSpotify(){
+  const streams = DATA.spotify.streams;
+  new Chart(document.getElementById('chart-spotify-streams'), {
+    type:'line',
+    data:{ labels: streams.map(d=>d.date), datasets:[{label:'Streams', data: streams.map(d=>d.streams), borderColor:PALETTE.spotify, backgroundColor:'rgba(29,185,84,0.08)', fill:true, pointRadius:0, borderWidth:1.6, tension:.15}]},
+    options:{ responsive:true, maintainAspectRatio:false, scales:{x:{ticks:{maxTicksLimit:8}, grid:{display:false}}, y:{beginAtZero:true, grid:{color:PALETTE.grid}}}, plugins:{legend:{display:false}} }
+  });
+
+  const eng = DATA.spotify.engagement;
+  new Chart(document.getElementById('chart-spotify-engagement'), {
+    data:{
+      labels: eng.map(d=>d.date),
+      datasets:[
+        {type:'bar', label:'Consumption hours', data: eng.map(d=>d.consumptionHours), backgroundColor:'rgba(29,185,84,0.35)', yAxisID:'y'},
+        {type:'line', label:'Followers (cumulative)', data: eng.map(d=>d.followers), borderColor:PALETTE.apple, pointRadius:0, borderWidth:1.6, yAxisID:'y1', spanGaps:true},
+      ]
+    },
+    options:{ responsive:true, maintainAspectRatio:false,
+      scales:{ x:{ticks:{maxTicksLimit:8}, grid:{display:false}}, y:{beginAtZero:true, grid:{color:PALETTE.grid}, title:{display:true,text:'hours'}}, y1:{beginAtZero:true, position:'right', grid:{display:false}, title:{display:true,text:'followers'}} },
+      plugins:{legend:{position:'top', align:'end'}}
+    }
+  });
+
+  const ret = DATA.spotify.wowRetention;
+  new Chart(document.getElementById('chart-spotify-retention'), {
+    type:'line',
+    data:{ labels: ret.map(d=>d.weekStart), datasets:[{label:'Retention %', data: ret.map(d=>d.retentionPct), borderColor:PALETTE.spotify, backgroundColor:'transparent', pointRadius:2, borderWidth:1.6, tension:.2}]},
+    options:{ responsive:true, maintainAspectRatio:false, scales:{x:{ticks:{maxTicksLimit:8}, grid:{display:false}}, y:{beginAtZero:true, max:100, grid:{color:PALETTE.grid}, ticks:{callback:v=>v+'%'}}}, plugins:{legend:{display:false}} }
+  });
+
+  const comp = DATA.spotify.completion;
+  new Chart(document.getElementById('chart-spotify-completion'), {
+    type:'bar',
+    data:{ labels: comp.map(d=>d.title.length>28?d.title.slice(0,27)+'…':d.title), datasets:[{label:'Completion %', data: comp.map(d=>d.completionPct), backgroundColor: PALETTE.spotify}]},
+    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{max:100, grid:{color:PALETTE.grid}, ticks:{callback:v=>v+'%'}}, y:{grid:{display:false}}} }
+  });
+})();
+
+// ---------- Apple ----------
+(function renderApple(){
+  const o = DATA.apple.overview;
+  const cards = [
+    {label:'Followers', value: fmt(o.followers)},
+    {label:'Listeners (unique)', value: fmt(o.listeners)},
+    {label:'Engaged listeners', value: fmt(o.engagedListeners), note:'≥20 min or 40% of an episode'},
+    {label:'Plays', value: fmt(o.playsHeader), note:'Apple header figure, rounded; episode-table sum is ' + fmt(DATA.apple.sumOfListedPlays)},
+    {label:'Time listened', value: fmt(o.timeListenedHours) + ' h', note:`Following ${fmt(o.timeListenedFollowing)} h + not following ${fmt(o.timeListenedNotFollowing)} h`},
+  ];
+  document.getElementById('apple-kpis').innerHTML = cards.map(c=>`<div class="kpi-card"><div class="label">${c.label}</div><div class="value">${c.value}</div>${c.note?`<div class="note">${c.note}</div>`:''}</div>`).join('');
+
+  const tc = DATA.apple.topCities;
+  const top15 = tc.cities.slice(0,15);
+  document.getElementById('apple-cities-sub').textContent = `Top ${top15.length} of ${tc.cities.length} listed cities · ${fmt(tc.allCitiesTotal)} total listeners` + (tc.listTruncated ? ' (list truncated in source screenshot — does not sum to the total)' : '');
+  new Chart(document.getElementById('chart-apple-cities'), {
+    type:'bar',
+    data:{ labels: top15.map(c=>c.city), datasets:[{label:'Listeners', data: top15.map(c=>c.listeners), backgroundColor: PALETTE.apple}]},
+    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{grid:{color:PALETTE.grid}}, y:{grid:{display:false}}} }
+  });
+
+  renderSortableTable('table-apple-episodes',
+    [
+      {key:'name', label:'Episode', align:'left'},
+      {key:'releaseDate', label:'Release'},
+      {key:'duration', label:'Duration'},
+      {key:'listeners', label:'Listeners', numeric:true},
+      {key:'engagedListeners', label:'Engaged', numeric:true},
+      {key:'plays', label:'Plays', numeric:true},
+      {key:'avgConsumption', label:'Avg. consumption', numeric:true, fmt:v=>fmtPct(v)},
+    ],
+    DATA.apple.episodes, 'plays', 'desc'
+  );
+})();
+
+// ---------- YouTube ----------
+(function renderYouTube(){
+  const o = DATA.youtube.overview;
+  const cards = [
+    {label:'Views', value: fmt(o.views)},
+    {label:'Watch time', value: fmt(o.watchTimeHours,1) + ' h'},
+    {label:'Subscribers', value: '+' + fmt(o.subscribersNet), note:'Net change for the period'},
+    {label:'Impressions', value: fmt(o.impressions)},
+    {label:'Impressions CTR', value: fmtPct(o.ctr)},
+    {label:'Avg. view duration', value: o.avgViewDuration},
+  ];
+  document.getElementById('youtube-kpis').innerHTML = cards.map(c=>`<div class="kpi-card"><div class="label">${c.label}</div><div class="value">${c.value}</div>${c.note?`<div class="note">${c.note}</div>`:''}</div>`).join('');
+
+  const src = DATA.youtube.trafficSources.filter(s=>s.source!=='Total');
+  new Chart(document.getElementById('chart-youtube-traffic'), {
+    type:'bar',
+    data:{ labels: src.map(s=>s.source), datasets:[{label:'Views', data: src.map(s=>s.views), backgroundColor: PALETTE.youtube}]},
+    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{grid:{color:PALETTE.grid}}, y:{grid:{display:false}}} }
+  });
+
+  const funnel = DATA.youtube.funnel;
+  document.getElementById('youtube-funnel').innerHTML = funnel.map(f => {
+    const val = typeof f.value === 'number' ? (f.value < 1 ? fmtPct(f.value) : fmt(f.value, f.value % 1 !== 0 ? 2 : 0)) : f.value;
+    return `<div style="padding:8px 0; border-bottom:1px solid var(--border)">
+      <div style="display:flex; justify-content:space-between; font-size:.86rem"><strong>${f.stage}</strong><span>${val}</span></div>
+      ${f.notes ? `<div class="footnote" style="margin-top:2px">${f.notes}</div>` : ''}
+    </div>`;
+  }).join('');
+
+  renderSortableTable('table-youtube-videos',
+    [
+      {key:'title', label:'Video', align:'left'},
+      {key:'duration', label:'Duration'},
+      {key:'views', label:'Views', numeric:true},
+      {key:'watchTimeHours', label:'Watch time (h)', numeric:true, fmt:v=>fmt(v,1)},
+      {key:'subscribers', label:'Subscribers', numeric:true},
+      {key:'impressions', label:'Impressions', numeric:true},
+      {key:'ctr', label:'CTR', numeric:true, fmt:v=>fmtPct(v)},
+    ],
+    DATA.youtube.videos, 'views', 'desc'
+  );
+})();
+
+// ---------- generic sortable table ----------
+function renderSortableTable(tableId, columns, rows, defaultKey, defaultDir){
+  const table = document.getElementById(tableId);
+  let sortKey = defaultKey, sortDir = defaultDir;
+
+  function draw(){
+    const sorted = [...rows].sort((a,b) => {
+      let av = a[sortKey], bv = b[sortKey];
+      if (av===null||av===undefined) av = -Infinity;
+      if (bv===null||bv===undefined) bv = -Infinity;
+      if (typeof av === 'string') return sortDir==='asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+      return sortDir==='asc' ? av-bv : bv-av;
+    });
+    let thead = '<thead><tr>' + columns.map(c => {
+      const arrow = c.key===sortKey ? `<span class="sort-arrow">${sortDir==='asc'?'▲':'▼'}</span>` : '';
+      return `<th data-key="${c.key}">${c.label} ${arrow}</th>`;
+    }).join('') + '</tr></thead>';
+    let tbody = '<tbody>' + sorted.map(r => '<tr>' + columns.map(c => {
+      let v = r[c.key];
+      v = c.fmt ? c.fmt(v) : (c.numeric ? naOr(v) : (v===null||v===undefined?'—':v));
+      return `<td>${v}</td>`;
+    }).join('') + '</tr>').join('') + '</tbody>';
+    table.innerHTML = thead + tbody;
+    table.querySelectorAll('thead th').forEach(th => {
+      th.addEventListener('click', () => {
+        const key = th.dataset.key;
+        if (sortKey === key) sortDir = sortDir==='asc'?'desc':'asc';
+        else { sortKey = key; sortDir = 'desc'; }
+        draw();
+      });
+    });
+  }
+  draw();
+}
+</script>
+</body>
+</html>

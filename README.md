@@ -1,28 +1,51 @@
-# The Melting Pod — Analytics Dashboard (project repo)
+# The Melting Pod — Analytics Dashboard
 
-This repository is set up to be handed to **Claude Code on the web** (claude.ai/code),
-which will build an interactive dashboard from the consolidated analytics workbook.
+An interactive, cross-platform analytics dashboard for **The Melting Pod** podcast, built from
+consolidated Megaphone / Spotify / Apple Podcasts / YouTube exports.
 
 ## What's here
-- `CLAUDE.md` — the full project brief and context (Claude Code reads this automatically).
-- `PROMPT.md` — a starter task to paste into the Claude Code session.
-- `data/consolidated/` — the 12-tab analytics workbook.
-- `data/raw/` — the original CSV exports.
-- `data/screenshots/` — platform screenshots that had no CSV export.
+- **`index.html`** — the dashboard. Self-contained: open it directly in any browser (double-click,
+  no server, no internet connection needed). Chart.js is vendored inline, and all data is embedded
+  in the page at build time.
+- `CLAUDE.md` — the full project brief: data inventory, metric definitions, and the comparability
+  caveats the dashboard must surface.
+- `PROMPT.md` — the original task brief given to Claude Code.
+- `data/consolidated/` — the 12-tab analytics workbook (source of truth for screenshot-derived
+  tables: Platform Summary, Apple Episodes, Apple Top Cities, YouTube Videos/Traffic/Funnel).
+- `data/raw/` — the original per-platform CSV exports (source for the true time series: Megaphone
+  daily downloads, Spotify streams/engagement/completion/retention, Megaphone Technology).
+- `data/screenshots/` — platform screenshots that had no CSV export (already transcribed into the
+  consolidated workbook).
+- `templates/index_template.html` — the HTML/CSS/JS shell, with a `/*__DASHBOARD_DATA__*/`
+  placeholder for the data and a `/*__CHARTJS_LIB__*/` placeholder for the vendored chart library.
+- `vendor/chart.umd.js` — Chart.js 4.4.4 (MIT), vendored so the dashboard has zero external
+  network dependencies.
+- `scripts/build_data.py` — the build step (see below).
 
-## How to use it with Claude Code on the web
-1. Create an **empty GitHub repository** (private is fine).
-2. Upload this folder's contents to it — on the repo page use **Add file → Upload files** and
-   drag everything in (no git command line needed).
-3. Go to **claude.ai/code**, sign in, and connect GitHub when prompted (a paid Claude plan is required).
-4. Select this repository, then paste the contents of `PROMPT.md` as the task.
-5. Claude Code builds the dashboard on a branch and opens a pull request for review.
+## Build step
+`index.html` is generated, not hand-edited. The build step is one dependency-light Python script:
+
+```
+pip install openpyxl
+python3 scripts/build_data.py
+```
+
+It reads the raw CSVs and the consolidated workbook, assembles one JSON blob, and inlines it (plus
+the vendored Chart.js) into `templates/index_template.html` to produce `index.html`. Re-run it any
+time the source data changes — the output is fully deterministic from the inputs.
 
 ## Viewing the dashboard
-- Simplest: after merging, download `index.html` and open it in a browser.
-- Hosted: enable **GitHub Pages** (Settings → Pages → deploy from branch) to get a shareable URL.
+- Simplest: open `index.html` directly in a browser — no server required.
+- Hosted: enable **GitHub Pages** (Settings → Pages → deploy from branch) for a shareable URL.
 
 ## Refreshing each month
-Drop the new platform exports into `data/raw/` (and any new screenshots into `data/screenshots/`),
-then start a new Claude Code session with a prompt like: "Refresh the dashboard from the latest
-files in data/ and update the screenshot-derived figures." See `CLAUDE.md` for the caveats to preserve.
+1. Drop the new Megaphone/Spotify CSV exports into `data/raw/` (same filename patterns), and any
+   new screenshots into `data/screenshots/`.
+2. Update `data/consolidated/…xlsx` with the new screenshot-derived figures (Platform Summary,
+   Apple Episodes, Apple Top Cities, YouTube Videos/Traffic Sources/Funnel) — these have no CSV
+   export and must be transcribed by hand from the new screenshots, same as the initial build.
+3. Re-run `python3 scripts/build_data.py` to regenerate `index.html`.
+
+Keep the caveats in `CLAUDE.md` in mind when transcribing: don't invent trend lines for Apple/
+YouTube snapshots, and compute the "Other platforms" download residual from Megaphone's own
+per-app download report, not native play counts.
