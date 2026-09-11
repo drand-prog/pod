@@ -253,16 +253,21 @@ def build_apple_top_cities(wb):
     header_idx = next(i for i, r in enumerate(rows) if r[0] == "City")
     all_cities_total = None
     cities = []
-    truncated = False
+    note = None
     for r in rows[header_idx + 1 :]:
         if r[0] == "All Cities":
             all_cities_total = r[1]
             continue
-        if str(r[0]).startswith("…") or str(r[0]).startswith("..."):
-            truncated = True
+        if r[1] is None:
+            # A footnote row (why the list doesn't sum to the total, a
+            # display-floor caveat, etc.) rather than a city — recognized by
+            # having no listener count, not by matching specific wording, so
+            # whatever caveat is actually true this refresh gets surfaced
+            # instead of a fixed "truncated" assumption baked into the code.
+            note = r[0]
             continue
         cities.append({"city": r[0], "listeners": r[1]})
-    return {"allCitiesTotal": all_cities_total, "cities": cities, "listTruncated": truncated}
+    return {"allCitiesTotal": all_cities_total, "cities": cities, "note": note}
 
 
 def build_youtube_videos(wb):
