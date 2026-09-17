@@ -572,6 +572,35 @@ def main():
         raise RuntimeError(f"Platform Summary has no {name!r} row")
 
     apple_plays_header = metric("Plays / Streams / Views", "apple")
+    apple_episodes_data = build_apple_episodes(wb)
+    episode_count = len(apple_episodes_data["episodes"])
+
+    # Industry benchmark from a Captivate/IAB "Podcasting Stats" slide (Global/Dax,
+    # @podcast411, July 2026): percentile thresholds for downloads-per-episode in
+    # the first 30 days after release. We don't track per-episode downloads (only
+    # aggregate daily downloads across the whole show), so the closest honest
+    # comparison is a lifetime average — total downloads to date over episode
+    # count — clearly not the same measurement as the benchmark's 30-day-capped
+    # figure, and inserted into the ranked list at its own value rather than
+    # matched to a specific bracket.
+    benchmark_brackets = [
+        {"topPct": 50, "downloadsPerEp": 28},
+        {"topPct": 20, "downloadsPerEp": 189},
+        {"topPct": 10, "downloadsPerEp": 677},
+        {"topPct": 5, "downloadsPerEp": 1884},
+        {"topPct": 2, "downloadsPerEp": 5840},
+        {"topPct": 1, "downloadsPerEp": 11716},
+    ]
+    our_downloads_per_ep = round(daily_tab_total / episode_count, 1)
+    benchmark_rows = []
+    inserted = False
+    for b in benchmark_brackets:
+        if not inserted and our_downloads_per_ep < b["downloadsPerEp"]:
+            benchmark_rows.append({"label": "The Melting Pod (lifetime avg)", "downloadsPerEp": our_downloads_per_ep, "ours": True})
+            inserted = True
+        benchmark_rows.append({"label": f"Top {b['topPct']}%", "downloadsPerEp": b["downloadsPerEp"], "ours": False})
+    if not inserted:
+        benchmark_rows.append({"label": "The Melting Pod (lifetime avg)", "downloadsPerEp": our_downloads_per_ep, "ours": True})
 
     data = {
         "generatedAt": datetime.utcnow().strftime("%Y-%m-%d"),
@@ -609,7 +638,7 @@ def main():
                 "timeListenedFollowing": metric("— of which Following (Apple)", "apple"),
                 "timeListenedNotFollowing": metric("— of which Not following (Apple)", "apple"),
             },
-            **build_apple_episodes(wb),
+            **apple_episodes_data,
             "topCities": build_apple_top_cities(wb),
         },
         "youtube": {
@@ -706,6 +735,13 @@ def main():
                 "url": "https://www.thebulwark.com/p/trump-said-hed-target-illegal-immigration",
             },
         ],
+        "downloadBenchmark": {
+            "source": 'Captivate/IAB "Podcasting Stats — Median & Mean" (Global/Dax, @podcast411, July 2026); IAB numbers for episodes released on Captivate, downloads in the first 30 days after release',
+            "rows": benchmark_rows,
+            "ourTotalDownloads": daily_tab_total,
+            "ourEpisodeCount": episode_count,
+            "period": periods["megaphoneDaily"],
+        },
     }
 
     template = TEMPLATE_PATH.read_text(encoding="utf-8")

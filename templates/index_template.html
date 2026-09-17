@@ -82,10 +82,11 @@
     <div class="sub">Consolidated from Megaphone, Spotify, Apple Podcasts Connect, and YouTube Studio · generated <span id="generated-at"></span></div>
   </header>
 
-  <details class="caveats" open>
-    <summary>Read before comparing numbers across platforms</summary>
-    <ul id="caveats-list"></ul>
-  </details>
+  <section id="benchmark">
+    <h2>How The Melting Pod Compares <span class="period">— industry downloads-per-episode benchmark</span></h2>
+    <div id="benchmark-table-wrap"></div>
+    <p class="footnote" id="benchmark-footnote"></p>
+  </section>
 
   <section id="summary">
     <h2>Platform Summary <span class="period">— see per-row periods below; platforms are not on a shared time window</span></h2>
@@ -216,6 +217,11 @@
     </div>
   </section>
 
+  <details class="caveats">
+    <summary>Read before comparing numbers across platforms</summary>
+    <ul id="caveats-list"></ul>
+  </details>
+
   <footer class="site">
     <div>Metric definitions are each platform's own wording (not standardized across platforms):</div>
     <ul id="sources-list"></ul>
@@ -298,6 +304,21 @@ if (DATA.notableEvents && DATA.notableEvents.length) {
       return `<li><strong>${dateStr}</strong> — ${e.description} <a href="${e.url}" target="_blank" rel="noopener">source</a></li>`;
     }).join('');
 }
+
+// ---------- downloads-per-episode benchmark ----------
+(function renderBenchmark(){
+  const b = DATA.downloadBenchmark;
+  let html = '<table class="summary-table"><thead><tr><th>Percentile</th><th>Downloads / ep (first 30 days)</th></tr></thead><tbody>';
+  b.rows.forEach(r => {
+    html += r.ours
+      ? `<tr style="background:var(--accent-soft)"><td>${r.label}</td><td><strong>${fmt(r.downloadsPerEp, r.downloadsPerEp % 1 !== 0 ? 1 : 0)}</strong></td></tr>`
+      : `<tr><td>${r.label}</td><td>${fmt(r.downloadsPerEp)}</td></tr>`;
+  });
+  html += '</tbody></table>';
+  document.getElementById('benchmark-table-wrap').innerHTML = html;
+  document.getElementById('benchmark-footnote').textContent =
+    `Benchmark: ${b.source}. Our figure is a lifetime average (${fmt(b.ourTotalDownloads)} Megaphone downloads ÷ ${b.ourEpisodeCount} episodes released, ${b.period}) — not the same measurement as the benchmark's first-30-days-per-episode window, and likely somewhat inflated by it since older episodes have had months to keep accumulating downloads that a 30-day-capped figure wouldn't include. Directional comparison only.`;
+})();
 
 // ---------- platform summary table ----------
 (function renderSummary(){
