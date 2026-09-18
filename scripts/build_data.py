@@ -187,6 +187,46 @@ def build_megaphone_episodes():
                 "reachPct": float(reach_row["% OF TOTAL"].rstrip("%")) / 100.0,
             }
         )
+    return out
+
+
+def build_megaphone_episode_first30d():
+    """Real first-30-days-after-release downloads per episode.
+
+    Megaphone's per-episode report has no first-30-days column of its own
+    (see build_megaphone_episodes), but it can be filtered to an arbitrary
+    date range and broken down by episode — so a report filtered to exactly
+    [release date, release date + 29] gives each episode's own true 30-day
+    figure. The project owner pulls one such report per episode once that
+    episode's window has fully elapsed; each file covers one window and
+    reports every episode's downloads *during that window* (not since each
+    episode's own release), so only the row(s) whose PUBLISHED date equals
+    the window's start date are that window's actual target episode(s) —
+    everything else in the file is a different episode's incidental
+    activity during someone else's window and must be ignored.
+
+    Returns a dict of {episode title: first-30-days downloads}, containing
+    only episodes whose window has actually been pulled so far — not all
+    episodes will have one yet, and that's an honest gap, not an error.
+    """
+    out = {}
+    for path in sorted(RAW.glob("Megaphone_episode-30day-report-*.csv")):
+        window_range = extract_date_range_from_filename(path)
+        if window_range is None:
+            raise RuntimeError(f"Can't parse the 30-day window's date range from filename: {path.name}")
+        window_start = window_range[0]
+        rows = read_csv_rows(path)
+        matched_any = False
+        for r in rows:
+            if parse_date(r["PUBLISHED"]) == window_start:
+                out[r["EPISODE"].strip()] = int(float(r["DOWNLOADS"]))
+                matched_any = True
+        if not matched_any:
+            raise RuntimeError(
+                f"{path.name}: no episode was published on {window_start} (the window's own start date) — "
+                "check that this report was filtered to the right episode's release date."
+            )
+    return out
     out.sort(key=lambda e: -e["downloadsToDate"])
     return out
 
@@ -618,14 +658,23 @@ def main():
     apple_plays_header = metric("Plays / Streams / Views", "apple")
     apple_episodes_data = build_apple_episodes(wb)
     megaphone_episodes = build_megaphone_episodes()
+    first30d_by_title = build_megaphone_episode_first30d()
+    for e in megaphone_episodes:
+        first30d = first30d_by_title.get(e["title"])
+        if first30d is not None and first30d < e["first7d"]:
+            raise RuntimeError(
+                f"{e['title']!r}: first-30-days downloads ({first30d}) is less than first-7-days "
+                f"({e['first7d']}) — downloads can't un-accumulate, so one of these reports is wrong."
+            )
+        e["first30d"] = first30d
 
     # Industry benchmark from a Captivate/IAB "Podcasting Stats" slide (Global/Dax,
     # @podcast411, July 2026): percentile thresholds for downloads-per-episode in
-    # the first 30 days after release. Megaphone's own per-episode report has no
-    # first-30-days column (only 24-hour, 7-day, and lifetime-to-date), so we use
-    # the first-7-days average as a real (not derived-from-aggregate, not
-    # estimated) lower bound: every episode's true first-30-days figure must be
-    # >= its first-7-days figure, since downloads only accumulate over time.
+    # the first 30 days after release. Uses each episode's real first-30-days
+    # figure where a windowed report has been pulled for it; for episodes whose
+    # 30-day window hasn't been pulled yet (or hasn't fully elapsed), falls back
+    # to that episode's first-7-days figure as a real lower bound — never a
+    # fabricated estimate, since first-30-days can only be >= first-7-days.
     benchmark_brackets = [
         {"topPct": 50, "downloadsPerEp": 28},
         {"topPct": 20, "downloadsPerEp": 189},
@@ -634,17 +683,22 @@ def main():
         {"topPct": 2, "downloadsPerEp": 5840},
         {"topPct": 1, "downloadsPerEp": 11716},
     ]
-    our_first7d_avg = round(sum(e["first7d"] for e in megaphone_episodes) / len(megaphone_episodes), 1)
+    exact_30d_count = sum(1 for e in megaphone_episodes if e["first30d"] is not None)
+    our_blended_avg = round(
+        sum(e["first30d"] if e["first30d"] is not None else e["first7d"] for e in megaphone_episodes)
+        / len(megaphone_episodes),
+        1,
+    )
     our_lifetime_avg = round(sum(e["downloadsToDate"] for e in megaphone_episodes) / len(megaphone_episodes), 1)
     benchmark_rows = []
     inserted = False
     for b in benchmark_brackets:
-        if not inserted and our_first7d_avg < b["downloadsPerEp"]:
-            benchmark_rows.append({"label": "The Melting Pod (first 7 days avg)", "downloadsPerEp": our_first7d_avg, "ours": True})
+        if not inserted and our_blended_avg < b["downloadsPerEp"]:
+            benchmark_rows.append({"label": "The Melting Pod (30-day avg)", "downloadsPerEp": our_blended_avg, "ours": True})
             inserted = True
         benchmark_rows.append({"label": f"Top {b['topPct']}%", "downloadsPerEp": b["downloadsPerEp"], "ours": False})
     if not inserted:
-        benchmark_rows.append({"label": "The Melting Pod (first 7 days avg)", "downloadsPerEp": our_first7d_avg, "ours": True})
+        benchmark_rows.append({"label": "The Melting Pod (30-day avg)", "downloadsPerEp": our_blended_avg, "ours": True})
 
     data = {
         "generatedAt": datetime.utcnow().strftime("%Y-%m-%d"),
@@ -783,9 +837,10 @@ def main():
         "downloadBenchmark": {
             "source": 'Captivate/IAB "Podcasting Stats — Median & Mean" (Global/Dax, @podcast411, July 2026); IAB numbers for episodes released on Captivate, downloads in the first 30 days after release',
             "rows": benchmark_rows,
-            "ourFirst7DayAvg": our_first7d_avg,
+            "ourBlendedAvg": our_blended_avg,
             "ourLifetimeAvg": our_lifetime_avg,
             "ourEpisodeCount": len(megaphone_episodes),
+            "ourExact30dCount": exact_30d_count,
         },
     }
 
