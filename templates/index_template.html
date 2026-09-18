@@ -317,7 +317,7 @@ if (DATA.notableEvents && DATA.notableEvents.length) {
   html += '</tbody></table>';
   document.getElementById('benchmark-table-wrap').innerHTML = html;
   document.getElementById('benchmark-footnote').textContent =
-    `Benchmark: ${b.source}. Our figure is a lifetime average (${fmt(b.ourTotalDownloads)} Megaphone downloads ÷ ${b.ourEpisodeCount} episodes released, ${b.period}) — not the same measurement as the benchmark's first-30-days-per-episode window, and likely somewhat inflated by it since older episodes have had months to keep accumulating downloads that a 30-day-capped figure wouldn't include. Directional comparison only.`;
+    `Benchmark: ${b.source}. Real per-episode Megaphone data (not derived from the aggregate daily-downloads total) across all ${b.ourEpisodeCount} episodes — but Megaphone's own report has no first-30-days column, only 24-hour, 7-day, and lifetime-to-date figures. We use the first-7-days average (${fmt(b.ourFirst7DayAvg,1)}/ep) as a real lower bound: every episode's true first-30-days number must be at least its first-7-days number, since downloads only accumulate. For context, the lifetime-to-date average is ${fmt(b.ourLifetimeAvg,1)}/ep — an upper-bound-ish reference in the other direction, inflated by however many months each episode has had to keep accumulating downloads beyond any 30-day window. The true first-30-days figure sits somewhere between these two, likely closer to the lower bound.`;
 })();
 
 // ---------- platform summary table ----------

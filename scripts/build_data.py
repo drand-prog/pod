@@ -33,7 +33,7 @@ OUTPUT_PATH = ROOT / "index.html"
 
 def parse_date(s):
     s = s.strip()
-    for fmt in ("%Y-%m-%d", "%m/%d/%Y"):
+    for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%b %d, %Y"):
         try:
             return datetime.strptime(s, fmt).strftime("%Y-%m-%d")
         except ValueError:
@@ -145,6 +145,50 @@ def build_megaphone_technology():
         pct = float(r["% OF TOTAL"].strip().rstrip("%")) / 100.0
         out.append({"app": app, "downloads": downloads, "pct": pct})
     return out, path
+
+
+def build_megaphone_episodes():
+    """Real per-episode Megaphone downloads, cross-checked against a second,
+    independently-exported report before trusting either.
+
+    Megaphone's per-episode report gives lifetime-to-date downloads plus
+    fixed-window downloads at 24 hours and 7 days after release — no
+    first-30-days column exists, unlike the IAB industry benchmark this
+    feeds into. First-7-days is the closest real (not derived/estimated)
+    proxy: since downloads only accumulate over time, each episode's true
+    first-30-days figure must be >= its first-7-days figure, making the
+    7-day average a legitimate lower bound rather than a guess.
+    """
+    downloads_rows = read_csv_rows(find_one("Megaphone_top-episode-report-*.csv"))
+    reach_rows = read_csv_rows(find_one("Megaphone_download-reach-by-episode-*.csv"))
+    reach_by_title = {r["EPISODE"].strip(): r for r in reach_rows}
+
+    out = []
+    for r in downloads_rows:
+        title = r["EPISODE"].strip()
+        downloads = int(float(r["DOWNLOADS"]))
+        reach_row = reach_by_title.get(title)
+        if reach_row is None:
+            raise RuntimeError(f"Episode {title!r} is in the downloads report but missing from the reach report")
+        reach_downloads = int(reach_row["DOWNLOADS"].replace(",", ""))
+        if abs(reach_downloads - downloads) > 1:
+            raise RuntimeError(
+                f"DOWNLOADS mismatch for {title!r} between the two Megaphone episode reports: "
+                f"{downloads} vs {reach_downloads} — one of them may be stale."
+            )
+        out.append(
+            {
+                "title": title,
+                "published": parse_date(r["PUBLISHED"]),
+                "downloadsToDate": downloads,
+                "first24h": int(float(r["FIRST 24 HOURS"])),
+                "first7d": int(float(r["FIRST 7 DAYS"])),
+                "reach": int(reach_row["Download reach"].replace(",", "")),
+                "reachPct": float(reach_row["% OF TOTAL"].rstrip("%")) / 100.0,
+            }
+        )
+    out.sort(key=lambda e: -e["downloadsToDate"])
+    return out
 
 
 def build_spotify_streams():
@@ -573,16 +617,15 @@ def main():
 
     apple_plays_header = metric("Plays / Streams / Views", "apple")
     apple_episodes_data = build_apple_episodes(wb)
-    episode_count = len(apple_episodes_data["episodes"])
+    megaphone_episodes = build_megaphone_episodes()
 
     # Industry benchmark from a Captivate/IAB "Podcasting Stats" slide (Global/Dax,
     # @podcast411, July 2026): percentile thresholds for downloads-per-episode in
-    # the first 30 days after release. We don't track per-episode downloads (only
-    # aggregate daily downloads across the whole show), so the closest honest
-    # comparison is a lifetime average — total downloads to date over episode
-    # count — clearly not the same measurement as the benchmark's 30-day-capped
-    # figure, and inserted into the ranked list at its own value rather than
-    # matched to a specific bracket.
+    # the first 30 days after release. Megaphone's own per-episode report has no
+    # first-30-days column (only 24-hour, 7-day, and lifetime-to-date), so we use
+    # the first-7-days average as a real (not derived-from-aggregate, not
+    # estimated) lower bound: every episode's true first-30-days figure must be
+    # >= its first-7-days figure, since downloads only accumulate over time.
     benchmark_brackets = [
         {"topPct": 50, "downloadsPerEp": 28},
         {"topPct": 20, "downloadsPerEp": 189},
@@ -591,16 +634,17 @@ def main():
         {"topPct": 2, "downloadsPerEp": 5840},
         {"topPct": 1, "downloadsPerEp": 11716},
     ]
-    our_downloads_per_ep = round(daily_tab_total / episode_count, 1)
+    our_first7d_avg = round(sum(e["first7d"] for e in megaphone_episodes) / len(megaphone_episodes), 1)
+    our_lifetime_avg = round(sum(e["downloadsToDate"] for e in megaphone_episodes) / len(megaphone_episodes), 1)
     benchmark_rows = []
     inserted = False
     for b in benchmark_brackets:
-        if not inserted and our_downloads_per_ep < b["downloadsPerEp"]:
-            benchmark_rows.append({"label": "The Melting Pod (lifetime avg)", "downloadsPerEp": our_downloads_per_ep, "ours": True})
+        if not inserted and our_first7d_avg < b["downloadsPerEp"]:
+            benchmark_rows.append({"label": "The Melting Pod (first 7 days avg)", "downloadsPerEp": our_first7d_avg, "ours": True})
             inserted = True
         benchmark_rows.append({"label": f"Top {b['topPct']}%", "downloadsPerEp": b["downloadsPerEp"], "ours": False})
     if not inserted:
-        benchmark_rows.append({"label": "The Melting Pod (lifetime avg)", "downloadsPerEp": our_downloads_per_ep, "ours": True})
+        benchmark_rows.append({"label": "The Melting Pod (first 7 days avg)", "downloadsPerEp": our_first7d_avg, "ours": True})
 
     data = {
         "generatedAt": datetime.utcnow().strftime("%Y-%m-%d"),
@@ -611,6 +655,7 @@ def main():
             "byApp": megaphone_tech,
             "appReportTotal": app_report_total,
             "dailyTabTotal": daily_tab_total,
+            "episodes": megaphone_episodes,
             "otherResidual": {
                 "total": app_report_total,
                 "apple": apple_downloads,
@@ -738,9 +783,9 @@ def main():
         "downloadBenchmark": {
             "source": 'Captivate/IAB "Podcasting Stats — Median & Mean" (Global/Dax, @podcast411, July 2026); IAB numbers for episodes released on Captivate, downloads in the first 30 days after release',
             "rows": benchmark_rows,
-            "ourTotalDownloads": daily_tab_total,
-            "ourEpisodeCount": episode_count,
-            "period": periods["megaphoneDaily"],
+            "ourFirst7DayAvg": our_first7d_avg,
+            "ourLifetimeAvg": our_lifetime_avg,
+            "ourEpisodeCount": len(megaphone_episodes),
         },
     }
 
