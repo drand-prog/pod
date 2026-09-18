@@ -55,7 +55,8 @@
   table.summary-table td.na{color:var(--ink-soft)}
   .footnote{font-size:.78rem; color:var(--ink-soft); margin-top:8px}
   .panel-grid{display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:start}
-  @media (max-width:800px){ .panel-grid{grid-template-columns:1fr} }
+  .panel-grid.benchmark-grid{grid-template-columns:.6fr 1fr}
+  @media (max-width:800px){ .panel-grid{grid-template-columns:1fr} .panel-grid.benchmark-grid{grid-template-columns:1fr} }
   .chart-card{background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:16px; box-shadow:var(--shadow)}
   .chart-card h3{margin:0 0 2px; font-size:.95rem}
   .chart-card .chart-sub{font-size:.76rem; color:var(--ink-soft); margin-bottom:10px}
@@ -84,8 +85,17 @@
 
   <section id="benchmark">
     <h2>How The Melting Pod Compares <span class="period">— industry downloads-per-episode benchmark</span></h2>
-    <div id="benchmark-table-wrap"></div>
-    <p class="footnote" id="benchmark-footnote"></p>
+    <div class="panel-grid benchmark-grid">
+      <div>
+        <div id="benchmark-table-wrap"></div>
+        <p class="footnote" id="benchmark-footnote"></p>
+      </div>
+      <div class="chart-card">
+        <h3>30-day downloads by episode <span class="tag snapshot">snapshot</span></h3>
+        <div class="chart-sub" id="benchmark-episodes-sub"></div>
+        <canvas id="chart-benchmark-episodes"></canvas>
+      </div>
+    </div>
   </section>
 
   <section id="summary">
@@ -317,7 +327,15 @@ if (DATA.notableEvents && DATA.notableEvents.length) {
   html += '</tbody></table>';
   document.getElementById('benchmark-table-wrap').innerHTML = html;
   document.getElementById('benchmark-footnote').textContent =
-    `Benchmark: ${b.source}. Real per-episode Megaphone data across all ${b.ourEpisodeCount} episodes: ${b.ourExact30dCount} of them now have a confirmed real first-30-days figure (from a Megaphone report filtered to that episode's own [release, release+29] window); the remaining ${b.ourEpisodeCount - b.ourExact30dCount} haven't had that window pulled yet (or the 30 days haven't fully elapsed), so they fall back to their real first-7-days figure as a lower bound — never an estimate, since first-30-days can only be >= first-7-days. Blended average across all ${b.ourEpisodeCount}: ${fmt(b.ourBlendedAvg,1)}/ep. For context, the lifetime-to-date average (no 30-day cap at all) is ${fmt(b.ourLifetimeAvg,1)}/ep.`;
+    `Benchmark: ${b.source}. Real per-episode Megaphone data across all ${b.ourEpisodeCount} episodes: ${b.ourExact30dCount} of them now have a confirmed real first-30-days figure (from a Megaphone report filtered to that episode's own [release, release+29] window); the remaining ${b.ourEpisodeCount - b.ourExact30dCount} haven't had that window pulled yet (or the 30 days haven't fully elapsed), so they fall back to their real first-7-days figure as a lower bound — never an estimate, since first-30-days can only be >= first-7-days. Blended average across all ${b.ourEpisodeCount}: ${fmt(b.ourBlendedAvg)}/ep. For context, the lifetime-to-date average (no 30-day cap at all) is ${fmt(b.ourLifetimeAvg,1)}/ep.`;
+
+  const epsWith30d = DATA.megaphone.episodes.filter(e => e.first30d !== null).sort((a,b2) => b2.first30d - a.first30d);
+  document.getElementById('benchmark-episodes-sub').textContent = `${epsWith30d.length} of ${DATA.megaphone.episodes.length} episodes have a confirmed first-30-days figure so far`;
+  new Chart(document.getElementById('chart-benchmark-episodes'), {
+    type: 'bar',
+    data: { labels: epsWith30d.map(e => e.title.length > 28 ? e.title.slice(0, 27) + '…' : e.title), datasets: [{label: 'Downloads (first 30 days)', data: epsWith30d.map(e => e.first30d), backgroundColor: PALETTE.megaphone}] },
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: {legend: {display: false}}, scales: {x: {grid: {color: PALETTE.grid}}, y: {grid: {display: false}}} }
+  });
 })();
 
 // ---------- platform summary table ----------

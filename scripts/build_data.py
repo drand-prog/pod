@@ -684,10 +684,11 @@ def main():
         {"topPct": 1, "downloadsPerEp": 11716},
     ]
     exact_30d_count = sum(1 for e in megaphone_episodes if e["first30d"] is not None)
+    # Rounded to a whole number: the fractional digit implied false precision
+    # for a figure that's already a blend of exact and lower-bound episodes.
     our_blended_avg = round(
         sum(e["first30d"] if e["first30d"] is not None else e["first7d"] for e in megaphone_episodes)
-        / len(megaphone_episodes),
-        1,
+        / len(megaphone_episodes)
     )
     our_lifetime_avg = round(sum(e["downloadsToDate"] for e in megaphone_episodes) / len(megaphone_episodes), 1)
     benchmark_rows = []
