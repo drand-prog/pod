@@ -223,7 +223,7 @@
     <div class="platform-block panel-grid">
       <div class="chart-card">
         <h3>Traffic sources <span class="tag snapshot">snapshot</span></h3>
-        <div class="chart-sub">Views by discovery surface</div>
+        <div class="chart-sub" id="youtube-traffic-sub">Views by discovery surface</div>
         <canvas id="chart-youtube-traffic"></canvas>
       </div>
       <div class="chart-card">
@@ -255,7 +255,7 @@
     <div class="platform-block">
       <div class="chart-card">
         <h3>Per-video performance <span class="tag snapshot">snapshot</span></h3>
-        <div class="chart-sub">All videos in the period · click a column header to sort</div>
+        <div class="chart-sub" id="youtube-videos-sub">Click a column header to sort</div>
         <div class="data-table-wrap"><table class="data-table" id="table-youtube-videos"></table></div>
       </div>
     </div>
@@ -667,6 +667,7 @@ if (DATA.notableEvents && DATA.notableEvents.length) {
   document.getElementById('youtube-kpis').innerHTML = cards.map(c=>`<div class="kpi-card"><div class="label">${c.label}</div><div class="value">${c.value}</div>${c.note?`<div class="note">${c.note}</div>`:''}</div>`).join('');
 
   const src = DATA.youtube.trafficSources.filter(s=>s.source!=='Total');
+  document.getElementById('youtube-traffic-sub').textContent = `Views by discovery surface, ${DATA.periods.youtubeTraffic}`;
   new Chart(document.getElementById('chart-youtube-traffic'), {
     type:'bar',
     data:{ labels: src.map(s=>s.source), datasets:[{label:'Views', data: src.map(s=>s.views), backgroundColor: PALETTE.youtube}]},
@@ -682,6 +683,7 @@ if (DATA.notableEvents && DATA.notableEvents.length) {
     </div>`;
   }).join('');
 
+  document.getElementById('youtube-videos-sub').textContent = `All videos, ${DATA.periods.youtubeVideoTable} · click a column header to sort`;
   renderSortableTable('table-youtube-videos',
     [
       {key:'title', label:'Video', align:'left'},

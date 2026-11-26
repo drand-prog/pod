@@ -50,6 +50,12 @@ def fmt_month_day(iso):
     return f"{d.strftime('%b')} {d.day}"
 
 
+def fmt_duration(total_seconds):
+    h, rem = divmod(total_seconds, 3600)
+    m, s = divmod(rem, 60)
+    return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+
+
 def fmt_period(start_iso, end_iso):
     start = datetime.strptime(start_iso, "%Y-%m-%d")
     end = datetime.strptime(end_iso, "%Y-%m-%d")
@@ -707,59 +713,68 @@ def build_apple_top_cities(wb):
     return {"allCitiesTotal": all_cities_total, "cities": cities, "note": note}
 
 
-def build_youtube_videos(wb):
-    # Videos-only (Shorts excluded — no fresh per-Short breakdown exists) and
-    # no per-video Subscribers figure in this export (dropped entirely,
-    # rather than shown as an unavailable placeholder for every row).
-    rows = sheet_rows(wb, "YouTube Videos")
-    header_idx = next(i for i, r in enumerate(rows) if r[0] == "Video title")
-    videos = []
-    sum_row = None
-    total_row = None
-    for r in rows[header_idx + 1 :]:
-        if str(r[0]).startswith("Sum of rows"):
-            sum_row = r
+def build_youtube_videos():
+    """Per-video performance table — videos-only (Shorts/clips excluded, see
+    CANONICAL_EPISODE_TITLES and build_youtube_clips), full lifetime (Jan 1
+    onward). Replaces an earlier xlsx-snapshot version of this table with
+    YouTube's own "Content" breakdown export (the same file that feeds the
+    clip classification above), now that a real full-history pull exists —
+    see build_youtube_clips's docstring for why titles, not content IDs,
+    are the join key.
+
+    One title ("Three Big Lies About Immigrants and Fraud...") appears twice
+    in this export under two different content IDs — a near-empty duplicate
+    (1 view, no publish date) alongside the real video's row. Rather than
+    showing a phantom near-zero duplicate row, the one with more views wins.
+    """
+    path = find_one("YouTube_TheMeltingPod_TableData_*.csv")
+    rows = read_csv_rows(path)
+    videos_by_title = {}
+    for r in rows:
+        title = r["Video title"].strip()
+        if r["Content"].strip() == "Total" or title not in CANONICAL_EPISODE_TITLES:
             continue
-        if str(r[0]).startswith("Channel total"):
-            total_row = r
+        views = int(r["Views"]) if r["Views"].strip() else 0
+        if title in videos_by_title and videos_by_title[title]["views"] >= views:
             continue
-        videos.append(
-            {
-                "title": r[0],
-                "duration": r[1],
-                "views": r[2],
-                "viewsPct": r[3],
-                "watchTimeHours": r[4],
-                "watchTimePct": r[5],
-                "impressions": r[6],
-                "ctr": r[7],
-            }
-        )
-    return {
-        "videos": videos,
-        "sumOfRows": {"views": sum_row[2], "watchTimeHours": sum_row[4], "impressions": sum_row[6]} if sum_row else None,
-        "channelTotal": {"views": total_row[2], "watchTimeHours": total_row[4], "impressions": total_row[6], "ctr": total_row[7]} if total_row else None,
-    }
+        duration_seconds = int(r["Duration"]) if r["Duration"].strip() else None
+        videos_by_title[title] = {
+            "title": title,
+            "duration": fmt_duration(duration_seconds) if duration_seconds is not None else None,
+            "views": views,
+            "watchTimeHours": float(r["Watch time (hours)"]) if r["Watch time (hours)"].strip() else 0.0,
+            "impressions": int(r["Thumbnail impressions"]) if r["Thumbnail impressions"].strip() else 0,
+            "ctr": round(float(r["Thumbnail click-through rate (%)"]) / 100, 4) if r["Thumbnail click-through rate (%)"].strip() else None,
+        }
+    videos = sorted(videos_by_title.values(), key=lambda v: -v["views"])
+    return {"videos": videos}, extract_date_range_from_filename(path)
 
 
-def build_youtube_traffic(wb):
-    rows = sheet_rows(wb, "YouTube Traffic Sources")
-    header_idx = next(i for i, r in enumerate(rows) if r[0] == "Traffic source")
+def build_youtube_traffic():
+    """Views by discovery surface/traffic source — full lifetime (Jan 1
+    onward), from YouTube's own CSV export. Replaces an earlier xlsx
+    snapshot. viewsPct/watchTimePct (share of channel total) aren't in this
+    export, so they're computed here from the export's own "Total" row.
+    """
+    path = find_one("YouTube_TheMeltingPod_TrafficSource_*.csv")
+    rows = read_csv_rows(path)
     out = []
-    for r in rows[header_idx + 1 :]:
+    for r in rows:
         out.append(
             {
-                "source": r[0],
-                "impressions": r[1],
-                "ctr": r[2],
-                "views": r[3],
-                "viewsPct": r[4],
-                "avgViewDuration": r[5],
-                "watchTimeHours": r[6],
-                "watchTimePct": r[7],
+                "source": r["Traffic source"].strip(),
+                "impressions": int(r["Thumbnail impressions"]) if r["Thumbnail impressions"].strip() else None,
+                "ctr": round(float(r["Thumbnail click-through rate (%)"]) / 100, 4) if r["Thumbnail click-through rate (%)"].strip() else None,
+                "views": int(r["Views"]),
+                "avgViewDuration": r["Average view duration"].strip() or None,
+                "watchTimeHours": float(r["Watch time (hours)"]),
             }
         )
-    return out
+    total = next((s for s in out if s["source"] == "Total"), None)
+    for s in out:
+        s["viewsPct"] = round(s["views"] / total["views"], 4) if total and total["views"] else None
+        s["watchTimePct"] = round(s["watchTimeHours"] / total["watchTimeHours"], 4) if total and total["watchTimeHours"] else None
+    return out, extract_date_range_from_filename(path)
 
 
 def build_youtube_funnel(wb):
@@ -835,15 +850,29 @@ def main():
     youtube_device, youtube_device_asof = build_youtube_device_type()
     youtube_geo, youtube_geo_asof = build_youtube_geography()
     youtube_clips, youtube_clips_range = build_youtube_clips()
-    stephen_miller_title = "BREAKING: Stephen Miller interrupts our podcast!"
-    stephen_miller_daily = build_youtube_clip_daily(stephen_miller_title)
+    # Picked dynamically (highest-views clip) rather than hardcoded: with the
+    # Sep 11-Nov 25 export this was always the Stephen Miller clip (the only
+    # one with any activity in that window), but the full-lifetime export
+    # shows several older clips have actually accumulated more lifetime views
+    # — hardcoding would have kept calling Stephen Miller "top-performing"
+    # after that stopped being true.
+    top_clip_title = youtube_clips[0]["title"]
+    top_clip_daily = build_youtube_clip_daily(top_clip_title)
+    youtube_videos_data, youtube_videos_range = build_youtube_videos()
+    youtube_traffic, youtube_traffic_range = build_youtube_traffic()
 
     periods = {
         "spotifyApple": "All-time",
-        # Traffic Sources/Videos/Overview refreshed Sep 2026 (no exact day-count
-        # given by the export, unlike the original screenshot); the Funnel tab
-        # is not part of this refresh and still shows its own Jan 1-Jul 14 note.
+        # This is the Platform Summary's own YouTube period (overview KPI
+        # cards: views/watch time/subscribers/impressions) — a separate,
+        # still-unrefreshed xlsx snapshot. The per-video table, traffic
+        # sources, and country breakdown below now have their own more
+        # current periods (youtubeVideoTable/youtubeTraffic/youtubeGeoAsOf)
+        # from real full-lifetime CSV exports — deliberately not the same
+        # label, since they no longer cover the same window.
         "youtube": "Jan 1 – Sep 2026",
+        "youtubeVideoTable": fmt_period(*youtube_videos_range) if youtube_videos_range else None,
+        "youtubeTraffic": fmt_period(*youtube_traffic_range) if youtube_traffic_range else None,
         "megaphoneDaily": fmt_period(daily_start, daily_end),
         # The combined chart spans both hosting platforms — kept separate
         # from megaphoneDaily above, which stays Megaphone-only since that's
@@ -1052,16 +1081,16 @@ def main():
                 "ctr": 0.0372,
                 "avgViewDuration": "4:52",
             },
-            **build_youtube_videos(wb),
-            "trafficSources": build_youtube_traffic(wb),
+            **youtube_videos_data,
+            "trafficSources": youtube_traffic,
             "funnel": build_youtube_funnel(wb),
             "deviceType": youtube_device,
             "geo": youtube_geo,
             "audienceSegments": build_youtube_audience_segments(),
             "subscribersDaily": build_youtube_subscribers_daily(),
             "clips": youtube_clips,
-            "clipHighlightTitle": stephen_miller_title,
-            "clipHighlightDaily": stephen_miller_daily,
+            "clipHighlightTitle": top_clip_title,
+            "clipHighlightDaily": top_clip_daily,
         },
         "caveats": [
             "Different units, not interchangeable: Megaphone counts downloads, Apple/Spotify count plays, Spotify separately reports streams, YouTube counts views. These are not summed or directly compared as if identical.",
