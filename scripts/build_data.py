@@ -765,6 +765,12 @@ def main():
                 f"the Megaphone daily-downloads report covers {periods['megaphoneDaily']}. "
                 "Different periods — cross-platform totals are not strictly comparable."
             )
+        if row["metric"] == "Plays / Streams / Views":
+            # Same staleness class again: this Spotify cell is meant to be the
+            # exact sum of the per-episode "Plays since published" export, not
+            # a hand-copied figure — so a refresh of that export (new episodes,
+            # accumulated plays) silently left this cell behind until now.
+            row["spotify"] = sum(e["plays"] for e in spotify_episode_plays)
 
     def metric(name, col):
         """Look up one Platform Summary cell by metric label + platform column.
