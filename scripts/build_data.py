@@ -978,19 +978,20 @@ def main():
     ]
     # Art19 episodes (post-migration, Sep 16 onward) feed the same benchmark
     # alongside the Megaphone-era ones, screenshot-transcribed from Art19's
-    # Episode Comparison tool (see ART19_EPISODE_30DAY above). "confirmed"
-    # mirrors the Megaphone first30d/first7d distinction: True means the
-    # 30-day window has fully elapsed (a real final figure); False means
-    # it's a downloads-to-date lower bound for a window still in progress.
-    all_episode_values = [
-        (e["first30d"] if e["first30d"] is not None else e["first7d"], e["first30d"] is not None)
-        for e in megaphone_episodes
-    ] + [(e["downloads"], e["confirmed"]) for e in ART19_EPISODE_30DAY]
-    total_episode_count = len(all_episode_values)
-    exact_30d_count = sum(1 for _, exact in all_episode_values if exact)
-    # Rounded to a whole number: the fractional digit implied false precision
-    # for a figure that's already a blend of exact and lower-bound episodes.
-    our_blended_avg = round(sum(v for v, _ in all_episode_values) / total_episode_count)
+    # Episode Comparison tool (see ART19_EPISODE_30DAY above).
+    #
+    # Only episodes with a fully-elapsed, confirmed 30-day window are
+    # included in the average and chart — a still-in-progress episode's
+    # downloads-to-date (or a pre-30-day first-7-days fallback) is a real
+    # lower bound, but blending partial figures into the average pulled it
+    # down in a way that looked like a regression rather than what it
+    # actually was: fewer confirmed episodes, not worse performance.
+    total_episode_count = len(megaphone_episodes) + len(ART19_EPISODE_30DAY)
+    confirmed_episode_values = [e["first30d"] for e in megaphone_episodes if e["first30d"] is not None] + [
+        e["downloads"] for e in ART19_EPISODE_30DAY if e["confirmed"]
+    ]
+    exact_30d_count = len(confirmed_episode_values)
+    our_blended_avg = round(sum(confirmed_episode_values) / exact_30d_count)
     # Lifetime-to-date average is Megaphone-only: Art19 episodes are all
     # recent enough (and Art19 hasn't exposed a lifetime figure the way
     # Megaphone's per-episode report does) that a "lifetime" number for them
@@ -999,13 +1000,14 @@ def main():
     our_lifetime_avg = round(sum(e["downloadsToDate"] for e in megaphone_episodes) / len(megaphone_episodes), 1)
     episode_chart = sorted(
         [
-            {"title": e["title"], "value": e["first30d"], "source": "megaphone", "confirmed": True}
+            {"title": e["title"], "value": e["first30d"], "source": "megaphone"}
             for e in megaphone_episodes
             if e["first30d"] is not None
         ]
         + [
-            {"title": e["title"], "value": e["downloads"], "source": "art19", "confirmed": e["confirmed"]}
+            {"title": e["title"], "value": e["downloads"], "source": "art19"}
             for e in ART19_EPISODE_30DAY
+            if e["confirmed"]
         ],
         key=lambda x: -x["value"],
     )

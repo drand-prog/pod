@@ -100,7 +100,7 @@
       <div class="chart-card">
         <h3>30-day downloads by episode <span class="tag snapshot">snapshot</span></h3>
         <div class="chart-sub" id="benchmark-episodes-sub"></div>
-        <div class="chart-sub"><span class="platform-dot" style="background:var(--megaphone)"></span>Megaphone-era &nbsp; <span class="platform-dot" style="background:var(--other)"></span>Since Art19 migration &nbsp; (lighter bar = window still in progress, lower bound only)</div>
+        <div class="chart-sub"><span class="platform-dot" style="background:var(--megaphone)"></span>Megaphone-era &nbsp; <span class="platform-dot" style="background:var(--other)"></span>Since Art19 migration</div>
         <canvas id="chart-benchmark-episodes"></canvas>
       </div>
     </div>
@@ -373,12 +373,11 @@ if (DATA.notableEvents && DATA.notableEvents.length) {
   html += '</tbody></table>';
   document.getElementById('benchmark-table-wrap').innerHTML = html;
   document.getElementById('benchmark-footnote').textContent =
-    `Benchmark: ${b.source}. Real per-episode data across all ${b.ourEpisodeCount} episodes (${b.ourLifetimeEpisodeCount} Megaphone-era + ${b.ourEpisodeCount - b.ourLifetimeEpisodeCount} since the Art19 migration): ${b.ourExact30dCount} of them now have a confirmed real first-30-days figure (from a Megaphone or Art19 report/tool filtered to that episode's own [release, release+29] window); the remaining ${b.ourEpisodeCount - b.ourExact30dCount} haven't had that window pulled yet (or the 30 days haven't fully elapsed), so they fall back to their real first-7-days (Megaphone) or downloads-to-date (Art19) figure as a lower bound — never an estimate, since the final 30-day figure can only be >= that. Blended average across all ${b.ourEpisodeCount}: ${fmt(b.ourBlendedAvg)}/ep. For context, the lifetime-to-date average for the ${b.ourLifetimeEpisodeCount} Megaphone-era episodes only (no 30-day cap at all) is ${fmt(b.ourLifetimeAvg,1)}/ep.`;
+    `Benchmark: ${b.source}. Real per-episode data across all ${b.ourEpisodeCount} episodes (${b.ourLifetimeEpisodeCount} Megaphone-era + ${b.ourEpisodeCount - b.ourLifetimeEpisodeCount} since the Art19 migration): ${b.ourExact30dCount} of them have a confirmed real first-30-days figure (from a Megaphone or Art19 report/tool filtered to that episode's own [release, release+29] window, with that window fully elapsed). The remaining ${b.ourEpisodeCount - b.ourExact30dCount} haven't had that window pulled yet, or the 30 days haven't fully elapsed, so they're excluded from the average below rather than blended in at a partial (lower-bound) figure — which would understate them and bias the average down. Average across the ${b.ourExact30dCount} confirmed episodes: ${fmt(b.ourBlendedAvg)}/ep. For context, the lifetime-to-date average for the ${b.ourLifetimeEpisodeCount} Megaphone-era episodes only (no 30-day cap at all) is ${fmt(b.ourLifetimeAvg,1)}/ep.`;
 
   const epsChart = b.episodeChart;
-  const epsConfirmedCount = epsChart.filter(e => e.confirmed).length;
   document.getElementById('benchmark-episodes-sub').textContent =
-    `${epsChart.length} of ${b.ourEpisodeCount} episodes shown (have at least a confirmed first-30-days or in-progress downloads-to-date figure) — ${epsConfirmedCount} fully confirmed (30-day window elapsed), ${epsChart.length - epsConfirmedCount} still mid-window (lighter bars, lower bound only)`;
+    `${epsChart.length} of ${b.ourEpisodeCount} episodes have a confirmed first-30-days figure (30-day window fully elapsed) — the other ${b.ourEpisodeCount - epsChart.length} are excluded here until theirs has`;
   new Chart(document.getElementById('chart-benchmark-episodes'), {
     type: 'bar',
     data: {
@@ -386,21 +385,14 @@ if (DATA.notableEvents && DATA.notableEvents.length) {
       datasets: [{
         label: 'Downloads (first 30 days)',
         data: epsChart.map(e => e.value),
-        backgroundColor: epsChart.map(e => {
-          if (e.source === 'art19') return e.confirmed ? PALETTE.other : 'rgba(176,137,104,0.4)';
-          return e.confirmed ? PALETTE.megaphone : 'rgba(61,90,128,0.4)';
-        }),
+        backgroundColor: epsChart.map(e => e.source === 'art19' ? PALETTE.other : PALETTE.megaphone),
       }],
     },
     options: {
       indexAxis: 'y', responsive: true, maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
-        tooltip: { callbacks: { afterLabel: ctx => {
-          const e = epsChart[ctx.dataIndex];
-          const src = e.source === 'art19' ? 'Since Art19 migration' : 'Megaphone';
-          return e.confirmed ? src + ' — confirmed (30-day window elapsed)' : src + ' — in progress, downloads-to-date lower bound';
-        } } },
+        tooltip: { callbacks: { afterLabel: ctx => epsChart[ctx.dataIndex].source === 'art19' ? 'Since Art19 migration' : 'Megaphone' } },
       },
       scales: { x: { grid: { color: PALETTE.grid } }, y: { grid: { display: false } } },
     },
