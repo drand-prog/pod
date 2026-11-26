@@ -222,6 +222,19 @@ def build_megaphone_episodes():
     for r in downloads_rows:
         title = r["EPISODE"].strip()
         downloads = int(float(r["DOWNLOADS"]))
+        first24h = int(float(r["FIRST 24 HOURS"]))
+        first7d = int(float(r["FIRST 7 DAYS"]))
+        to_date = int(float(r["TO DATE"]))
+        if downloads == 0 and first24h == 0 and first7d == 0 and to_date == 0:
+            # A real Megaphone-tracked episode never reads literal zero across
+            # every single metric — this is Megaphone's report listing a
+            # placeholder row for an episode released after the Art19
+            # migration (it knows the episode exists from the feed, but has
+            # no actual download data for it). It's also absent from the
+            # reach-by-episode report entirely, which would otherwise raise
+            # the "missing from the reach report" error below. Skip it here;
+            # this episode's real data lives in ART19_EPISODE_30DAY instead.
+            continue
         reach_row = reach_by_title.get(title)
         if reach_row is None:
             raise RuntimeError(f"Episode {title!r} is in the downloads report but missing from the reach report")
