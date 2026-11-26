@@ -136,15 +136,47 @@ def build_megaphone_daily():
 
 
 def build_megaphone_technology():
-    path = find_one("Technology_Performance*.csv")
-    rows = read_csv_rows(path)
-    out = []
-    for r in rows:
-        app = r["APPLICATION"].strip()
-        downloads = int(r["DOWNLOADS"].replace(",", ""))
-        pct = float(r["% OF TOTAL"].strip().rstrip("%")) / 100.0
-        out.append({"app": app, "downloads": downloads, "pct": pct})
-    return out, path
+    """Megaphone's by-app download breakdown.
+
+    Unlike the daily downloads export, this report is queried for a fixed
+    date range rather than auto-expanding, so a refresh adds a new
+    non-overlapping window instead of extending the old one. Combines every
+    Technology_Performance*.csv file present by summing each app's downloads
+    across all windows, and reports any real gap between them explicitly
+    rather than implying continuous since-launch coverage.
+    """
+    paths = sorted(RAW.glob("Technology_Performance*.csv"))
+    if not paths:
+        raise FileNotFoundError(f"No file in {RAW} matches 'Technology_Performance*.csv'")
+    windows = []
+    totals = {}
+    for path in paths:
+        date_range = extract_date_range_from_filename(path)
+        if date_range is None:
+            raise RuntimeError(f"Can't parse the date range from filename: {path.name}")
+        windows.append(date_range)
+        for r in read_csv_rows(path):
+            app = r["APPLICATION"].strip()
+            downloads = int(r["DOWNLOADS"].replace(",", ""))
+            totals[app] = totals.get(app, 0) + downloads
+
+    windows.sort()
+    combined_total = sum(totals.values())
+    out = [
+        {"app": app, "downloads": downloads, "pct": round(downloads / combined_total, 4)}
+        for app, downloads in sorted(totals.items(), key=lambda kv: -kv[1])
+    ]
+
+    gaps = []
+    for (_, prev_end), (next_start, _) in zip(windows, windows[1:]):
+        prev_end_dt = datetime.strptime(prev_end, "%Y-%m-%d")
+        next_start_dt = datetime.strptime(next_start, "%Y-%m-%d")
+        if (next_start_dt - prev_end_dt).days > 1:
+            gap_start = (prev_end_dt + timedelta(days=1)).strftime("%Y-%m-%d")
+            gap_end = (next_start_dt - timedelta(days=1)).strftime("%Y-%m-%d")
+            gaps.append((gap_start, gap_end))
+
+    return out, windows[0][0], windows[-1][1], gaps
 
 
 def build_megaphone_episodes():
@@ -572,11 +604,9 @@ def main():
     # refresh would silently leave stale numbers in the KPI strip and
     # caveats text even though the underlying data/raw/ files were current.
     megaphone_daily = build_megaphone_daily()
-    megaphone_tech, megaphone_tech_path = build_megaphone_technology()
+    megaphone_tech, tech_start, tech_end, tech_gaps = build_megaphone_technology()
 
     daily_start, daily_end = megaphone_daily[0]["date"], megaphone_daily[-1]["date"]
-    tech_range = extract_date_range_from_filename(megaphone_tech_path)
-    tech_start, tech_end = tech_range if tech_range else (daily_start, daily_end)
 
     daily_tab_total = sum(d["downloads"] for d in megaphone_daily if d["downloads"] is not None)
     app_report_total = sum(a["downloads"] for a in megaphone_tech)
@@ -602,7 +632,10 @@ def main():
         # is not part of this refresh and still shows its own Jan 1-Jul 14 note.
         "youtube": "Jan 1 – Sep 2026",
         "megaphoneDaily": fmt_period(daily_start, daily_end),
-        "megaphoneAppReport": fmt_period(tech_start, tech_end),
+        "megaphoneAppReport": fmt_period(tech_start, tech_end) + (
+            " (gap: " + "; ".join(f"{fmt_month_day(g[0])}–{fmt_month_day(g[1])}" for g in tech_gaps) + " not included)"
+            if tech_gaps else ""
+        ),
         # Raw ISO end dates too, so the frontend can compute the gap between
         # the two Megaphone reports itself rather than parsing it back out
         # of the formatted strings above.
@@ -776,7 +809,11 @@ def main():
                 + (
                     " — one extra day plus rounding."
                     if abs((datetime.strptime(daily_end, '%Y-%m-%d') - datetime.strptime(tech_end, '%Y-%m-%d')).days) <= 2
-                    else f", because the app report hasn't been refreshed as recently as the daily downloads."
+                    else (
+                        ", because the daily-downloads tab hasn't been refreshed as recently as the app report."
+                        if datetime.strptime(tech_end, '%Y-%m-%d') > datetime.strptime(daily_end, '%Y-%m-%d')
+                        else ", because the app report hasn't been refreshed as recently as the daily downloads."
+                    )
                 )
                 + " The app-report total is used for the “Other” residual, which reflects the app report's period, not the daily tab's."
             ),
