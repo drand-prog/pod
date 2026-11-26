@@ -135,6 +135,23 @@ def build_megaphone_daily():
     return out
 
 
+def build_art19_daily():
+    """Daily downloads from Art19 — the hosting platform the show migrated
+    to from Megaphone in Sep 2026. Art19's own export reports
+    'unique_listeners_count' where Megaphone reported 'download reach';
+    plotted the same way (a secondary line) but the two aren't asserted to
+    be the same methodology, just the closest equivalent each platform
+    offers.
+    """
+    rows = read_csv_rows(find_one("Art19_downloads-daily-*.csv"))
+    out = [
+        {"date": r["time_unit"], "downloads": int(r["downloads"]), "listeners": int(r["unique_listeners_count"])}
+        for r in rows
+    ]
+    out.sort(key=lambda d: d["date"])
+    return out
+
+
 def build_megaphone_technology():
     """Megaphone's by-app download breakdown.
 
@@ -636,6 +653,7 @@ def main():
     # refresh would silently leave stale numbers in the KPI strip and
     # caveats text even though the underlying data/raw/ files were current.
     megaphone_daily = build_megaphone_daily()
+    art19_daily = build_art19_daily()
     megaphone_tech, tech_start, tech_end, tech_gaps = build_megaphone_technology()
     megaphone_geo, megaphone_geo_range = build_megaphone_geo()
     megaphone_time_of_day, megaphone_tod_range = build_megaphone_time_of_day()
@@ -643,6 +661,36 @@ def main():
     daily_start, daily_end = megaphone_daily[0]["date"], megaphone_daily[-1]["date"]
 
     daily_tab_total = sum(d["downloads"] for d in megaphone_daily if d["downloads"] is not None)
+
+    # Combined daily-downloads series for the trend chart: the show migrated
+    # hosting platforms from Megaphone to Art19 in Sep 2026, so Megaphone's
+    # own daily export simply stops (last day: Sep 11) and Art19's own export
+    # picks up separately (first day: Sep 16) — a real ~4-day gap during the
+    # migration itself, filled with nulls like any other reporting gap
+    # rather than glossed over. Each point is tagged with its source so the
+    # frontend can render the two periods distinguishably rather than
+    # implying one continuous measurement spanning a platform switch.
+    art19_total = sum(r["downloads"] for r in art19_daily)
+    art19_migration_date = art19_daily[0]["date"]
+    mp_by_date = {d["date"]: d for d in megaphone_daily if d["downloads"] is not None}
+    art19_by_date = {d["date"]: d for d in art19_daily}
+    combined_dates = sorted(set(mp_by_date) | set(art19_by_date))
+    combined_start = datetime.strptime(combined_dates[0], "%Y-%m-%d")
+    combined_end = datetime.strptime(combined_dates[-1], "%Y-%m-%d")
+    combined_daily = []
+    d = combined_start
+    while d <= combined_end:
+        iso = d.strftime("%Y-%m-%d")
+        if iso in mp_by_date:
+            row = mp_by_date[iso]
+            combined_daily.append({"date": iso, "downloads": row["downloads"], "reach": row["reach"], "source": "megaphone"})
+        elif iso in art19_by_date:
+            row = art19_by_date[iso]
+            combined_daily.append({"date": iso, "downloads": row["downloads"], "reach": row["listeners"], "source": "art19"})
+        else:
+            combined_daily.append({"date": iso, "downloads": None, "reach": None, "source": None})
+        d += timedelta(days=1)
+
     app_report_total = sum(a["downloads"] for a in megaphone_tech)
     apple_downloads = next((a["downloads"] for a in megaphone_tech if a["app"] == "Apple Podcasts"), None)
     spotify_downloads = next((a["downloads"] for a in megaphone_tech if a["app"] == "Spotify"), None)
@@ -666,6 +714,14 @@ def main():
         # is not part of this refresh and still shows its own Jan 1-Jul 14 note.
         "youtube": "Jan 1 – Sep 2026",
         "megaphoneDaily": fmt_period(daily_start, daily_end),
+        # The combined chart spans both hosting platforms — kept separate
+        # from megaphoneDaily above, which stays Megaphone-only since that's
+        # what the "Two Megaphone totals differ" caveat further down is
+        # actually about (Megaphone's own two internal reports, unrelated to
+        # the Art19 migration).
+        "downloadsCombined": fmt_period(combined_dates[0], combined_dates[-1])
+        + f" (migrated from Megaphone to Art19 on {fmt_month_day(art19_migration_date)})",
+        "art19MigrationDate": art19_migration_date,
         "megaphoneAppReport": fmt_period(tech_start, tech_end) + (
             " (gap: " + "; ".join(f"{fmt_month_day(g[0])}–{fmt_month_day(g[1])}" for g in tech_gaps) + " not included)"
             if tech_gaps else ""
@@ -775,10 +831,11 @@ def main():
         "periods": periods,
         "platformSummary": platform_summary,
         "megaphone": {
-            "daily": megaphone_daily,
+            "daily": combined_daily,
             "byApp": megaphone_tech,
             "appReportTotal": app_report_total,
             "dailyTabTotal": daily_tab_total,
+            "art19Total": art19_total,
             "episodes": megaphone_episodes,
             "geo": megaphone_geo,
             "timeOfDay": megaphone_time_of_day,
@@ -856,6 +913,13 @@ def main():
                 + " The app-report total is used for the “Other” residual, which reflects the app report's period, not the daily tab's."
             ),
             f"YouTube's country breakdown only lists {len(youtube_geo['countries'])} countries totaling {fmt(sum(c['views'] for c in youtube_geo['countries']))} views, against a channel total of {fmt(youtube_geo['total']['views'] if youtube_geo['total'] else 0)} — YouTube Studio doesn't break out the long tail below its per-country reporting threshold, so the list is shown as-is rather than padded to 100%.",
+            (
+                f"The show migrated hosting platforms from Megaphone to Art19 on {fmt_month_day(art19_migration_date)}, 2026. "
+                f"The daily downloads chart above combines both ({fmt(daily_tab_total)} Megaphone + {fmt(art19_total)} Art19 = {fmt(daily_tab_total + art19_total)} total), "
+                "tagged by source — not asserted to be identical methodology across the switch, just two platforms both reporting downloads. "
+                "The by-app breakdown, country/time-of-day breakdowns, and per-episode downloads panels are still Megaphone-only, frozen at their last export "
+                f"({fmt_month_day(tech_end)}), since no Art19 equivalents exist yet — the \"Other platforms\" residual above reflects only that frozen Megaphone window, not downloads since the migration."
+            ),
         ],
         "sources": [
             "Apple Podcasts Connect — Listener analytics: podcasters.apple.com/support/5392-listener-analytics",

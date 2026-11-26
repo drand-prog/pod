@@ -110,20 +110,20 @@
   </section>
 
   <section id="megaphone">
-    <h2><span class="platform-dot" style="background:var(--megaphone)"></span>Megaphone (downloads) <span class="period" id="megaphone-period"></span></h2>
+    <h2><span class="platform-dot" style="background:var(--megaphone)"></span>Downloads (Megaphone → Art19) <span class="period" id="megaphone-period"></span></h2>
     <div class="panel-grid">
       <div class="chart-card">
         <h3>Daily downloads <span class="tag">trend</span></h3>
-        <div class="chart-sub">Downloads + download reach, per day</div>
+        <div class="chart-sub">Downloads + reach/unique listeners, per day — darker line is Art19, lighter is the earlier Megaphone period</div>
         <canvas id="chart-megaphone-daily"></canvas>
       </div>
       <div class="chart-card">
-        <h3>Downloads by listening app</h3>
-        <div class="chart-sub">Top apps; long tail grouped. Source for the cross-platform “Other” residual.</div>
+        <h3>Downloads by listening app <span class="tag snapshot">Megaphone-era snapshot</span></h3>
+        <div class="chart-sub">Top apps; long tail grouped. Source for the cross-platform “Other” residual. Frozen at the Megaphone→Art19 migration — no Art19 equivalent yet.</div>
         <canvas id="chart-megaphone-byapp"></canvas>
       </div>
       <div class="chart-card">
-        <h3>Downloads by country <span class="tag snapshot">snapshot</span></h3>
+        <h3>Downloads by country <span class="tag snapshot">Megaphone-era snapshot</span></h3>
         <div class="chart-sub" id="megaphone-geo-sub"></div>
         <canvas id="chart-megaphone-geo"></canvas>
       </div>
@@ -131,7 +131,7 @@
     <p class="footnote" id="megaphone-footnote"></p>
     <div class="platform-block">
       <div class="chart-card">
-        <h3>Downloads by day &amp; time <span class="tag snapshot">snapshot</span></h3>
+        <h3>Downloads by day &amp; time <span class="tag snapshot">Megaphone-era snapshot</span></h3>
         <div class="chart-sub" id="megaphone-heatmap-sub"></div>
         <div id="megaphone-heatmap"></div>
       </div>
@@ -313,7 +313,7 @@ function monthTickScale(extra) {
 }
 
 document.getElementById('generated-at').textContent = DATA.generatedAt;
-document.getElementById('megaphone-period').textContent = '— ' + DATA.periods.megaphoneDaily;
+document.getElementById('megaphone-period').textContent = '— ' + DATA.periods.downloadsCombined;
 document.getElementById('youtube-period').textContent = '— ' + DATA.periods.youtube;
 
 // ---------- caveats ----------
@@ -383,13 +383,16 @@ if (DATA.notableEvents && DATA.notableEvents.length) {
 // ---------- Megaphone ----------
 (function renderMegaphone(){
   const daily = DATA.megaphone.daily;
+  const isArt19 = i => daily[i] && daily[i].source === 'art19';
   new Chart(document.getElementById('chart-megaphone-daily'), {
     type: 'line',
     data: {
       labels: daily.map(d=>d.date),
       datasets: [
-        {label:'Downloads', data: daily.map(d=>d.downloads), borderColor: PALETTE.megaphone, backgroundColor:'transparent', pointRadius:0, borderWidth:1.6, tension:.15},
-        {label:'Download reach', data: daily.map(d=>d.reach), borderColor: PALETTE.other, backgroundColor:'transparent', pointRadius:0, borderWidth:1.2, borderDash:[3,3], tension:.15},
+        {label:'Downloads', data: daily.map(d=>d.downloads), borderColor: PALETTE.megaphone, backgroundColor:'transparent', pointRadius:0, borderWidth:1.6, tension:.15,
+          segment: { borderColor: ctx => isArt19(ctx.p1DataIndex) ? PALETTE.megaphone : 'rgba(61,90,128,0.4)' }},
+        {label:'Reach / unique listeners', data: daily.map(d=>d.reach), borderColor: PALETTE.other, backgroundColor:'transparent', pointRadius:0, borderWidth:1.2, borderDash:[3,3], tension:.15,
+          segment: { borderColor: ctx => isArt19(ctx.p1DataIndex) ? PALETTE.other : 'rgba(176,137,104,0.4)' }},
       ]
     },
     options: {
