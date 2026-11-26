@@ -75,6 +75,7 @@
   .chart-card h3{margin:0 0 2px; font-size:.95rem}
   .chart-card .chart-sub{font-size:.76rem; color:var(--ink-soft); margin-bottom:10px}
   .chart-card canvas{max-height:280px}
+  #chart-benchmark-episodes{max-height:760px}
   .data-table-wrap{overflow-x:auto; background:var(--panel); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow)}
   .heatmap-wrap{overflow-x:auto}
   .heatmap{display:grid; grid-template-columns:44px repeat(24, minmax(22px,1fr)); gap:2px; min-width:680px}
@@ -313,6 +314,19 @@ const DATA = {"generatedAt":"2026-11-26","periods":{"spotifyApple":"All-time","y
 const fmt = (n, d=0) => (n===null || n===undefined || n==='—') ? '—' : Number(n).toLocaleString(undefined,{maximumFractionDigits:d, minimumFractionDigits:d});
 const fmtPct = (n, d=1) => (n===null || n===undefined || n==='—') ? '—' : (Number(n)*100).toFixed(d) + '%';
 const naOr = (v, formatter=fmt) => (v===null || v===undefined || v==='—') ? '<span class="na">—</span>' : formatter(v);
+// Wraps a long label into an array of lines (Chart.js renders each array
+// entry as its own tick line) instead of truncating it with an ellipsis.
+function wrapLabel(text, maxLineLen=26){
+  const words = text.split(' ');
+  const lines = [];
+  let line = '';
+  words.forEach(w => {
+    if ((line + ' ' + w).trim().length > maxLineLen && line) { lines.push(line); line = w; }
+    else { line = (line ? line + ' ' : '') + w; }
+  });
+  if (line) lines.push(line);
+  return lines;
+}
 
 const PALETTE = {
   megaphone: '#3D5A80', spotify: '#1DB954', apple: '#8a4f2b', other: '#B08968', youtube: '#CC2B2B',
@@ -395,7 +409,7 @@ if (DATA.notableEvents && DATA.notableEvents.length) {
   new Chart(document.getElementById('chart-benchmark-episodes'), {
     type: 'bar',
     data: {
-      labels: epsChart.map(e => e.title.length > 28 ? e.title.slice(0, 27) + '…' : e.title),
+      labels: epsChart.map(e => wrapLabel(e.title)),
       datasets: [{
         label: 'Downloads (first 30 days)',
         data: epsChart.map(e => e.value),
@@ -408,7 +422,7 @@ if (DATA.notableEvents && DATA.notableEvents.length) {
         legend: { display: false },
         tooltip: { callbacks: { afterLabel: ctx => epsChart[ctx.dataIndex].source === 'art19' ? 'Since Art19 migration' : 'Megaphone' } },
       },
-      scales: { x: { grid: { color: PALETTE.grid } }, y: { grid: { display: false } } },
+      scales: { x: { grid: { color: PALETTE.grid } }, y: { grid: { display: false }, ticks: { autoSkip: false } } },
     },
   });
 })();
