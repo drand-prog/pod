@@ -259,8 +259,40 @@ def build_megaphone_episode_first30d():
                 "check that this report was filtered to the right episode's release date."
             )
     return out
-    out.sort(key=lambda e: -e["downloadsToDate"])
-    return out
+
+
+def build_megaphone_geo():
+    """Megaphone's own country breakdown of downloads, for a fixed window
+    (queried by date range, not auto-expanding — see build_megaphone_technology).
+    Separate from Spotify's and YouTube's own geo breakdowns: this one is
+    downloads across every platform Megaphone sees, not plays/views on one
+    specific platform.
+    """
+    path = find_one("Megaphone_geolocation-performance-*.csv")
+    rows = read_csv_rows(path)
+    total = sum(int(r["DOWNLOADS"]) for r in rows)
+    out = [
+        {"country": r["Country"].strip(), "downloads": int(r["DOWNLOADS"]), "pct": round(int(r["DOWNLOADS"]) / total, 4)}
+        for r in rows
+    ]
+    out.sort(key=lambda d: -d["downloads"])
+    return out, extract_date_range_from_filename(path)
+
+
+def build_megaphone_time_of_day():
+    """Megaphone's downloads-by-day-and-hour breakdown, for the same kind of
+    fixed window as build_megaphone_geo. Megaphone's own day/hour label
+    (e.g. "Mon 12am") is split into day + time here; the frontend supplies
+    the canonical Mon-Sun / 12am-11pm ordering for the heatmap grid, since
+    that ordering is fixed and isn't itself data.
+    """
+    path = find_one("Megaphone_time-of-day-performance-*.csv")
+    rows = read_csv_rows(path)
+    out = []
+    for r in rows:
+        day, time = r["DAY / TIME"].split(" ", 1)
+        out.append({"day": day, "time": time, "downloads": int(r["DOWNLOADS"])})
+    return out, extract_date_range_from_filename(path)
 
 
 def build_spotify_streams():
@@ -605,6 +637,8 @@ def main():
     # caveats text even though the underlying data/raw/ files were current.
     megaphone_daily = build_megaphone_daily()
     megaphone_tech, tech_start, tech_end, tech_gaps = build_megaphone_technology()
+    megaphone_geo, megaphone_geo_range = build_megaphone_geo()
+    megaphone_time_of_day, megaphone_tod_range = build_megaphone_time_of_day()
 
     daily_start, daily_end = megaphone_daily[0]["date"], megaphone_daily[-1]["date"]
 
@@ -646,6 +680,8 @@ def main():
         "spotifyGeoAsOf": fmt_month_day(spotify_geo_asof) if spotify_geo_asof else None,
         "youtubeDeviceAsOf": fmt_month_day(youtube_device_asof) if youtube_device_asof else None,
         "youtubeGeoAsOf": fmt_month_day(youtube_geo_asof) if youtube_geo_asof else None,
+        "megaphoneGeo": fmt_period(*megaphone_geo_range) if megaphone_geo_range else None,
+        "megaphoneTimeOfDay": fmt_period(*megaphone_tod_range) if megaphone_tod_range else None,
     }
 
     platform_summary = build_platform_summary(wb)
@@ -744,6 +780,8 @@ def main():
             "appReportTotal": app_report_total,
             "dailyTabTotal": daily_tab_total,
             "episodes": megaphone_episodes,
+            "geo": megaphone_geo,
+            "timeOfDay": megaphone_time_of_day,
             "otherResidual": {
                 "total": app_report_total,
                 "apple": apple_downloads,

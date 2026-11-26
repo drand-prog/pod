@@ -62,6 +62,12 @@
   .chart-card .chart-sub{font-size:.76rem; color:var(--ink-soft); margin-bottom:10px}
   .chart-card canvas{max-height:280px}
   .data-table-wrap{overflow-x:auto; background:var(--panel); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow)}
+  .heatmap-wrap{overflow-x:auto}
+  .heatmap{display:grid; grid-template-columns:44px repeat(24, minmax(22px,1fr)); gap:2px; min-width:680px}
+  .heatmap .hm-corner{}
+  .heatmap .hm-hour{font-size:.6rem; color:var(--ink-soft); text-align:center; align-self:end; padding-bottom:2px}
+  .heatmap .hm-day{font-size:.74rem; color:var(--ink-soft); display:flex; align-items:center}
+  .heatmap .hm-cell{aspect-ratio:1; border-radius:3px}
   table.data-table{width:100%; border-collapse:collapse; font-size:.82rem; min-width:600px}
   table.data-table th, table.data-table td{padding:8px 10px; text-align:right; border-bottom:1px solid var(--border); white-space:nowrap}
   table.data-table th:first-child, table.data-table td:first-child{text-align:left; white-space:normal; min-width:180px}
@@ -116,8 +122,20 @@
         <div class="chart-sub">Top apps; long tail grouped. Source for the cross-platform “Other” residual.</div>
         <canvas id="chart-megaphone-byapp"></canvas>
       </div>
+      <div class="chart-card">
+        <h3>Downloads by country <span class="tag snapshot">snapshot</span></h3>
+        <div class="chart-sub" id="megaphone-geo-sub"></div>
+        <canvas id="chart-megaphone-geo"></canvas>
+      </div>
     </div>
     <p class="footnote" id="megaphone-footnote"></p>
+    <div class="platform-block">
+      <div class="chart-card">
+        <h3>Downloads by day &amp; time <span class="tag snapshot">snapshot</span></h3>
+        <div class="chart-sub" id="megaphone-heatmap-sub"></div>
+        <div id="megaphone-heatmap"></div>
+      </div>
+    </div>
   </section>
 
   <section id="spotify">
@@ -404,6 +422,39 @@ if (DATA.notableEvents && DATA.notableEvents.length) {
           : "the app report hasn't been refreshed as recently as the daily downloads");
     document.getElementById('megaphone-footnote').textContent =
       `App report total ${fmt(DATA.megaphone.appReportTotal)} (through ${fmtDate(appEnd)}) vs. daily-tab total ${fmt(DATA.megaphone.dailyTabTotal)} (through ${fmtDate(dailyEnd)}) — ${gapNote}; the app-report total is used for the "Other platforms" residual, which reflects the app report's period, not the daily tab's.`;
+  }
+
+  const mgeo = DATA.megaphone.geo;
+  const mgeoTop = mgeo.slice(0, 15);
+  document.getElementById('megaphone-geo-sub').textContent = `Top ${mgeoTop.length} of ${mgeo.length} countries by downloads, ${DATA.periods.megaphoneGeo}`;
+  new Chart(document.getElementById('chart-megaphone-geo'), {
+    type: 'bar',
+    data: { labels: mgeoTop.map(c => c.country), datasets: [{label: 'Downloads', data: mgeoTop.map(c => c.downloads), backgroundColor: PALETTE.megaphone}] },
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: {legend: {display: false}}, scales: {x: {grid: {color: PALETTE.grid}}, y: {grid: {display: false}}} }
+  });
+
+  {
+    const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    const HOURS = ['12am','1am','2am','3am','4am','5am','6am','7am','8am','9am','10am','11am','12pm','1pm','2pm','3pm','4pm','5pm','6pm','7pm','8pm','9pm','10pm','11pm'];
+    const tod = DATA.megaphone.timeOfDay;
+    const lookup = {};
+    tod.forEach(c => { lookup[c.day + '|' + c.time] = c.downloads; });
+    const maxVal = Math.max(...tod.map(c => c.downloads));
+    const totalVal = tod.reduce((s, c) => s + c.downloads, 0);
+    document.getElementById('megaphone-heatmap-sub').textContent = `${fmt(totalVal)} downloads by day of week and hour (time of day as reported by Megaphone), ${DATA.periods.megaphoneTimeOfDay}`;
+    let html = '<div class="heatmap-wrap"><div class="heatmap">';
+    html += '<div class="hm-corner"></div>';
+    HOURS.forEach(h => html += `<div class="hm-hour">${h}</div>`);
+    DAYS.forEach(day => {
+      html += `<div class="hm-day">${day}</div>`;
+      HOURS.forEach(h => {
+        const val = lookup[day + '|' + h] || 0;
+        const opacity = maxVal > 0 ? (0.06 + 0.94 * (val / maxVal)) : 0.06;
+        html += `<div class="hm-cell" style="background:rgba(61,90,128,${opacity.toFixed(3)})" title="${day} ${h}: ${fmt(val)} downloads"></div>`;
+      });
+    });
+    html += '</div></div>';
+    document.getElementById('megaphone-heatmap').innerHTML = html;
   }
 })();
 
