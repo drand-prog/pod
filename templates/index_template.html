@@ -76,6 +76,7 @@
   table.data-table tbody tr:hover{background:#faf8f5}
   .sort-arrow{font-size:.7em; opacity:.6}
   .platform-block{margin-top:14px}
+  .art19-subhead{margin:24px 0 2px; font-size:1rem; color:var(--ink)}
   footer.site{margin-top:48px; padding-top:18px; border-top:1px solid var(--border); font-size:.78rem; color:var(--ink-soft)}
   footer.site ul{padding-left:18px}
   .tag{display:inline-block; font-size:.68rem; padding:2px 7px; border-radius:99px; background:var(--accent-soft); color:var(--accent); font-weight:600; margin-left:6px; vertical-align:middle}
@@ -99,6 +100,7 @@
       <div class="chart-card">
         <h3>30-day downloads by episode <span class="tag snapshot">snapshot</span></h3>
         <div class="chart-sub" id="benchmark-episodes-sub"></div>
+        <div class="chart-sub"><span class="platform-dot" style="background:var(--megaphone)"></span>Megaphone-era &nbsp; <span class="platform-dot" style="background:var(--other)"></span>Since Art19 migration &nbsp; (lighter bar = window still in progress, lower bound only)</div>
         <canvas id="chart-benchmark-episodes"></canvas>
       </div>
     </div>
@@ -134,6 +136,20 @@
         <h3>Downloads by day &amp; time <span class="tag snapshot">Megaphone-era snapshot</span></h3>
         <div class="chart-sub" id="megaphone-heatmap-sub"></div>
         <div id="megaphone-heatmap"></div>
+      </div>
+    </div>
+    <h3 class="art19-subhead">Since the Art19 migration <span class="tag snapshot">Art19 snapshot</span></h3>
+    <p class="footnote" id="art19-footnote"></p>
+    <div class="platform-block panel-grid">
+      <div class="chart-card">
+        <h3>Downloads by country <span class="tag snapshot">Art19 snapshot</span></h3>
+        <div class="chart-sub" id="art19-geo-sub"></div>
+        <canvas id="chart-art19-geo"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3>Top episodes since migration <span class="tag snapshot">Art19 snapshot</span></h3>
+        <div class="chart-sub">Downloads since the show moved to Art19 — not a lifetime figure for episodes released before the migration (see footnote above)</div>
+        <canvas id="chart-art19-top-episodes"></canvas>
       </div>
     </div>
   </section>
@@ -243,6 +259,18 @@
         <div class="data-table-wrap"><table class="data-table" id="table-youtube-videos"></table></div>
       </div>
     </div>
+    <div class="platform-block panel-grid">
+      <div class="chart-card">
+        <h3>Clip performance <span class="tag snapshot">snapshot</span></h3>
+        <div class="chart-sub" id="youtube-clips-sub"></div>
+        <canvas id="chart-youtube-clips"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3 id="youtube-clip-highlight-title">Clip daily engaged views <span class="tag">trend</span></h3>
+        <div class="chart-sub">Daily engaged views for the channel's top-performing clip, over the period above</div>
+        <canvas id="chart-youtube-clip-highlight"></canvas>
+      </div>
+    </div>
   </section>
 
   <details class="caveats">
@@ -345,14 +373,37 @@ if (DATA.notableEvents && DATA.notableEvents.length) {
   html += '</tbody></table>';
   document.getElementById('benchmark-table-wrap').innerHTML = html;
   document.getElementById('benchmark-footnote').textContent =
-    `Benchmark: ${b.source}. Real per-episode Megaphone data across all ${b.ourEpisodeCount} episodes: ${b.ourExact30dCount} of them now have a confirmed real first-30-days figure (from a Megaphone report filtered to that episode's own [release, release+29] window); the remaining ${b.ourEpisodeCount - b.ourExact30dCount} haven't had that window pulled yet (or the 30 days haven't fully elapsed), so they fall back to their real first-7-days figure as a lower bound — never an estimate, since first-30-days can only be >= first-7-days. Blended average across all ${b.ourEpisodeCount}: ${fmt(b.ourBlendedAvg)}/ep. For context, the lifetime-to-date average (no 30-day cap at all) is ${fmt(b.ourLifetimeAvg,1)}/ep.`;
+    `Benchmark: ${b.source}. Real per-episode data across all ${b.ourEpisodeCount} episodes (${b.ourLifetimeEpisodeCount} Megaphone-era + ${b.ourEpisodeCount - b.ourLifetimeEpisodeCount} since the Art19 migration): ${b.ourExact30dCount} of them now have a confirmed real first-30-days figure (from a Megaphone or Art19 report/tool filtered to that episode's own [release, release+29] window); the remaining ${b.ourEpisodeCount - b.ourExact30dCount} haven't had that window pulled yet (or the 30 days haven't fully elapsed), so they fall back to their real first-7-days (Megaphone) or downloads-to-date (Art19) figure as a lower bound — never an estimate, since the final 30-day figure can only be >= that. Blended average across all ${b.ourEpisodeCount}: ${fmt(b.ourBlendedAvg)}/ep. For context, the lifetime-to-date average for the ${b.ourLifetimeEpisodeCount} Megaphone-era episodes only (no 30-day cap at all) is ${fmt(b.ourLifetimeAvg,1)}/ep.`;
 
-  const epsWith30d = DATA.megaphone.episodes.filter(e => e.first30d !== null).sort((a,b2) => b2.first30d - a.first30d);
-  document.getElementById('benchmark-episodes-sub').textContent = `${epsWith30d.length} of ${DATA.megaphone.episodes.length} episodes have a confirmed first-30-days figure so far`;
+  const epsChart = b.episodeChart;
+  const epsConfirmedCount = epsChart.filter(e => e.confirmed).length;
+  document.getElementById('benchmark-episodes-sub').textContent =
+    `${epsChart.length} of ${b.ourEpisodeCount} episodes shown (have at least a confirmed first-30-days or in-progress downloads-to-date figure) — ${epsConfirmedCount} fully confirmed (30-day window elapsed), ${epsChart.length - epsConfirmedCount} still mid-window (lighter bars, lower bound only)`;
   new Chart(document.getElementById('chart-benchmark-episodes'), {
     type: 'bar',
-    data: { labels: epsWith30d.map(e => e.title.length > 28 ? e.title.slice(0, 27) + '…' : e.title), datasets: [{label: 'Downloads (first 30 days)', data: epsWith30d.map(e => e.first30d), backgroundColor: PALETTE.megaphone}] },
-    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: {legend: {display: false}}, scales: {x: {grid: {color: PALETTE.grid}}, y: {grid: {display: false}}} }
+    data: {
+      labels: epsChart.map(e => e.title.length > 28 ? e.title.slice(0, 27) + '…' : e.title),
+      datasets: [{
+        label: 'Downloads (first 30 days)',
+        data: epsChart.map(e => e.value),
+        backgroundColor: epsChart.map(e => {
+          if (e.source === 'art19') return e.confirmed ? PALETTE.other : 'rgba(176,137,104,0.4)';
+          return e.confirmed ? PALETTE.megaphone : 'rgba(61,90,128,0.4)';
+        }),
+      }],
+    },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { afterLabel: ctx => {
+          const e = epsChart[ctx.dataIndex];
+          const src = e.source === 'art19' ? 'Since Art19 migration' : 'Megaphone';
+          return e.confirmed ? src + ' — confirmed (30-day window elapsed)' : src + ' — in progress, downloads-to-date lower bound';
+        } } },
+      },
+      scales: { x: { grid: { color: PALETTE.grid } }, y: { grid: { display: false } } },
+    },
   });
 })();
 
@@ -459,6 +510,29 @@ if (DATA.notableEvents && DATA.notableEvents.length) {
     html += '</div></div>';
     document.getElementById('megaphone-heatmap').innerHTML = html;
   }
+
+  const art19 = DATA.art19;
+  const migrationDateStr = new Date(DATA.periods.art19MigrationDate + 'T00:00:00Z').toLocaleDateString('en-US', {month:'short', day:'numeric', timeZone:'UTC'});
+  document.getElementById('art19-footnote').textContent =
+    `As of ${DATA.periods.art19GeoAsOf}, transcribed from Art19's dashboard (no CSV export available for these two views). Figures are all-time-since-migration, not lifetime: for episodes released before the ${migrationDateStr} migration, Megaphone already counted their early-life downloads, so Art19's own count for those episodes badly understates their true lifetime total — only episodes released after the migration have a complete Art19 figure.`;
+
+  const art19GeoTop = art19.geo.slice(0, 10);
+  document.getElementById('art19-geo-sub').textContent = `Top ${art19GeoTop.length} of ${art19.geo.length} countries by downloads since migration`;
+  new Chart(document.getElementById('chart-art19-geo'), {
+    type: 'bar',
+    data: { labels: art19GeoTop.map(c => c.country), datasets: [{label: 'Downloads', data: art19GeoTop.map(c => c.downloads), backgroundColor: PALETTE.other}] },
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: {legend: {display: false}}, scales: {x: {grid: {color: PALETTE.grid}}, y: {grid: {display: false}}} }
+  });
+
+  const art19Eps = art19.topEpisodesSinceMigration;
+  new Chart(document.getElementById('chart-art19-top-episodes'), {
+    type: 'bar',
+    data: {
+      labels: art19Eps.map(e => e.title.length > 28 ? e.title.slice(0, 27) + '…' : e.title),
+      datasets: [{ label: 'Downloads since migration', data: art19Eps.map(e => e.downloads), backgroundColor: PALETTE.other }],
+    },
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: {legend: {display: false}}, scales: {x: {grid: {color: PALETTE.grid}}, y: {grid: {display: false}}} }
+  });
 })();
 
 // ---------- Spotify ----------
@@ -656,6 +730,23 @@ if (DATA.notableEvents && DATA.notableEvents.length) {
   new Chart(document.getElementById('chart-youtube-subscribers'), {
     type:'line',
     data:{ labels: subs.map(d=>d.date), datasets:[{label:'Subscribers', data: subs.map(d=>d.subscribers), borderColor: PALETTE.youtube, backgroundColor:'rgba(204,43,43,0.08)', fill:true, pointRadius:0, borderWidth:1.6, tension:.15}]},
+    options:{ responsive:true, maintainAspectRatio:false, scales:{x:monthTickScale(), y:{beginAtZero:true, grid:{color:PALETTE.grid}}}, plugins:{legend:{display:false}} }
+  });
+
+  const clips = DATA.youtube.clips;
+  document.getElementById('youtube-clips-sub').textContent = `${clips.length} clips/Shorts in the period (${DATA.periods.youtubeClips}) — excludes full episodes and the trailer`;
+  new Chart(document.getElementById('chart-youtube-clips'), {
+    type:'bar',
+    data:{ labels: clips.map(c => c.title.length > 30 ? c.title.slice(0, 29) + '…' : c.title), datasets:[{label:'Views', data: clips.map(c=>c.views), backgroundColor: PALETTE.youtube}]},
+    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{grid:{color:PALETTE.grid}}, y:{grid:{display:false}}} }
+  });
+
+  const clipTitle = DATA.youtube.clipHighlightTitle;
+  const clipDaily = DATA.youtube.clipHighlightDaily;
+  document.getElementById('youtube-clip-highlight-title').innerHTML = `${clipTitle.length > 45 ? clipTitle.slice(0,44) + '…' : clipTitle} <span class="tag">trend</span>`;
+  new Chart(document.getElementById('chart-youtube-clip-highlight'), {
+    type:'line',
+    data:{ labels: clipDaily.map(d=>d.date), datasets:[{label:'Engaged views', data: clipDaily.map(d=>d.engagedViews), borderColor: PALETTE.youtube, backgroundColor:'rgba(204,43,43,0.08)', fill:true, pointRadius:0, borderWidth:1.6, tension:.15}]},
     options:{ responsive:true, maintainAspectRatio:false, scales:{x:monthTickScale(), y:{beginAtZero:true, grid:{color:PALETTE.grid}}}, plugins:{legend:{display:false}} }
   });
 })();

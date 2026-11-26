@@ -497,6 +497,134 @@ def build_youtube_subscribers_daily():
     return out
 
 
+# Full-length episode titles, used to separate YouTube's per-video exports
+# into real episodes vs. short-form clips/Shorts (title-matched against this
+# list rather than a duration cutoff, since the Trailer is legitimately short
+# but is still a tracked episode everywhere else on the dashboard).
+CANONICAL_EPISODE_TITLES = {
+    "Welcome to The Melting Pod",
+    "Biden and the Border (Part 1), with Charanya Krishnaswami",
+    "Biden and the Border (Part 2), with Charanya Krishnaswami",
+    "Trailer: What is The Melting Pod?",
+    "The Heartbreak of Immigration Reform, with Esther Olavarria",
+    "DACA and the Dreamer Movement, with Felicia Escobar Carrillo",
+    "Who’s Afraid of the H-1B?",
+    "The Truth About ICE, with Jason Houser",
+    "News Digest: Green Card Chaos, Hunger Strikes, and Stern Dad Energy",
+    "The Reality-Based Economics of Immigration, with Jenny Hunt",
+    "A Winning Message on Immigration, with Beatriz Lopez",
+    "Three Big Lies About Immigrants and Fraud, with Sonya Schwartz",
+    "Confessions of an Immigration Bureaucrat, with Michael Valverde",
+    "Asylum Is Not a Loophole, with Colleen Zengotitabengoa",
+    "News Dive: The Great De-Legalization, H-1B Follies, and Midterm Predictions",
+    "From Suing the Man to Serving the Man, with Lucas Guttentag",
+    "The Diplomat, with Rena Bitter",
+    "Midterm Special: Counting Wins, Drinking Tears, and Going Big",
+    "Real Talk About Latino Voters, with Felicia Escobar Carrillo",
+    "Truth, Lies, and Immigration Statistics, with Marc Rosenblum",
+}
+
+
+def build_youtube_clips():
+    """Short-form YouTube clips/Shorts — everything in the per-video table
+    that isn't a full tracked episode (see CANONICAL_EPISODE_TITLES). Kept
+    separate from the main per-video panel, which has always been
+    videos-only (Shorts excluded) since the original YouTube refresh.
+    """
+    path = find_one("YouTube_TheMeltingPod_TableData_*.csv")
+    rows = read_csv_rows(path)
+    out = []
+    for r in rows:
+        title = r["Video title"].strip()
+        if r["Content"].strip() == "Total" or title in CANONICAL_EPISODE_TITLES:
+            continue
+        views = int(r["Views"]) if r["Views"].strip() else 0
+        out.append(
+            {
+                "contentId": r["Content"].strip(),
+                "title": title,
+                "published": parse_date(r["Video publish time"]),
+                "durationSeconds": int(r["Duration"]) if r["Duration"].strip() else None,
+                "views": views,
+                "engagedViews": int(r["Engaged views"]) if r["Engaged views"].strip() else 0,
+                "watchTimeHours": float(r["Watch time (hours)"]) if r["Watch time (hours)"].strip() else 0.0,
+            }
+        )
+    out.sort(key=lambda c: -c["views"])
+    return out, extract_date_range_from_filename(path)
+
+
+# Transcribed directly from Art19 dashboard screenshots (no CSV export
+# offered for these views as of Nov 26, 2026). All figures are "all-time
+# since the Sep 16 migration" unless noted otherwise — Art19 has no visibility
+# into anything before the show moved to it from Megaphone.
+ART19_GEO_SCREENSHOT_DATE = "2026-11-26"
+ART19_GEO = [
+    {"country": "United States", "downloads": 2674, "pct": 0.8961},
+    {"country": "United Kingdom", "downloads": 70, "pct": 0.0235},
+    {"country": "Canada", "downloads": 48, "pct": 0.0161},
+    {"country": "Mexico", "downloads": 21, "pct": 0.007},
+    {"country": "India", "downloads": 20, "pct": 0.0067},
+    {"country": "Australia", "downloads": 14, "pct": 0.0047},
+    {"country": "Japan", "downloads": 11, "pct": 0.0037},
+    {"country": "Brazil", "downloads": 9, "pct": 0.003},
+    {"country": "France", "downloads": 9, "pct": 0.003},
+    {"country": "Spain", "downloads": 8, "pct": 0.0027},
+]
+
+# Art19's "Top Episodes" (Content tab), all-time since migration — only the
+# top 10 rows were visible in the screenshot, so this is a partial list, not
+# every episode. For episodes released before the Sep 16 migration (Heartbreak,
+# Biden Part 1), this download count only reflects activity since the
+# migration, not their true lifetime total — Megaphone already counted their
+# earlier downloads, so these numbers understate those two episodes badly and
+# are shown as a "since migration" metric, never combined with Megaphone's own
+# per-episode figures.
+ART19_TOP_EPISODES_SINCE_MIGRATION = [
+    {"title": "From Suing the Man to Serving the Man, with Lucas Guttentag", "published": "2026-10-05", "downloads": 537, "pct": 0.18},
+    {"title": "The Diplomat, with Rena Bitter", "published": "2026-10-21", "downloads": 488, "pct": 0.1635},
+    {"title": "Midterm Special: Counting Wins, Drinking Tears, and Going Big", "published": "2026-11-07", "downloads": 429, "pct": 0.1438},
+    {"title": "Real Talk About Latino Voters, with Felicia Escobar Carrillo", "published": "2026-11-11", "downloads": 389, "pct": 0.1304},
+    {"title": "Truth, Lies, and Immigration Statistics, with Marc Rosenblum", "published": "2026-11-19", "downloads": 370, "pct": 0.124},
+    {"title": "News Dive: The Great De-Legalization, H-1B Follies, and Midterm Predictions", "published": "2026-09-10", "downloads": 129, "pct": 0.0432},
+    {"title": "Asylum Is Not a Loophole, with Colleen Zengotitabengoa", "published": "2026-09-04", "downloads": 112, "pct": 0.0375},
+    {"title": "Confessions of an Immigration Bureaucrat, with Michael Valverde", "published": "2026-08-13", "downloads": 87, "pct": 0.0292},
+    {"title": "The Heartbreak of Immigration Reform, with Esther Olavarria", "published": "2026-03-02", "downloads": 81, "pct": 0.0271},
+    {"title": "Biden and the Border (Part 1), with Charanya Krishnaswami", "published": "2026-02-23", "downloads": 64, "pct": 0.0214},
+]
+
+# From Art19's "Episode Comparison" tool: true 30-day-since-release downloads,
+# usable for the cross-platform benchmark only for episodes released after the
+# Sep 16 migration (pre-migration episodes' Art19 downloads are truncated —
+# see above). "confirmed": True means the 30-day window has fully elapsed as
+# of today (Nov 26, 2026); False means the episode hasn't hit day 30 yet, so
+# the figure is downloads-to-date, a real lower bound on the eventual total,
+# not a final number.
+ART19_EPISODE_30DAY = [
+    {"title": "From Suing the Man to Serving the Man, with Lucas Guttentag", "published": "2026-10-05", "downloads": 492, "confirmed": True},
+    {"title": "The Diplomat, with Rena Bitter", "published": "2026-10-21", "downloads": 478, "confirmed": True},
+    {"title": "Midterm Special: Counting Wins, Drinking Tears, and Going Big", "published": "2026-11-07", "downloads": 429, "confirmed": False},
+    {"title": "Real Talk About Latino Voters, with Felicia Escobar Carrillo", "published": "2026-11-11", "downloads": 389, "confirmed": False},
+    {"title": "Truth, Lies, and Immigration Statistics, with Marc Rosenblum", "published": "2026-11-19", "downloads": 370, "confirmed": False},
+]
+
+
+def build_youtube_clip_daily(title):
+    """Daily engaged-views series for one specific clip, by exact title —
+    only clips YouTube's Chart-data export happened to include (recent/
+    trending ones) have day-by-day data; older long-tail clips don't.
+    """
+    path = find_one("YouTube_TheMeltingPod_ChartData_*.csv")
+    rows = read_csv_rows(path)
+    out = [
+        {"date": r["Date"].strip(), "engagedViews": int(r["Engaged views"])}
+        for r in rows
+        if r["Video title"].strip() == title
+    ]
+    out.sort(key=lambda d: d["date"])
+    return out
+
+
 def sheet_rows(wb, name):
     ws = wb[name]
     return [row for row in ws.iter_rows(values_only=True) if any(c is not None for c in row)]
@@ -706,6 +834,9 @@ def main():
     spotify_geo, spotify_geo_asof = build_spotify_geo()
     youtube_device, youtube_device_asof = build_youtube_device_type()
     youtube_geo, youtube_geo_asof = build_youtube_geography()
+    youtube_clips, youtube_clips_range = build_youtube_clips()
+    stephen_miller_title = "BREAKING: Stephen Miller interrupts our podcast!"
+    stephen_miller_daily = build_youtube_clip_daily(stephen_miller_title)
 
     periods = {
         "spotifyApple": "All-time",
@@ -738,6 +869,8 @@ def main():
         "youtubeGeoAsOf": fmt_month_day(youtube_geo_asof) if youtube_geo_asof else None,
         "megaphoneGeo": fmt_period(*megaphone_geo_range) if megaphone_geo_range else None,
         "megaphoneTimeOfDay": fmt_period(*megaphone_tod_range) if megaphone_tod_range else None,
+        "youtubeClips": fmt_period(*youtube_clips_range) if youtube_clips_range else None,
+        "art19GeoAsOf": fmt_month_day(ART19_GEO_SCREENSHOT_DATE),
     }
 
     platform_summary = build_platform_summary(wb)
@@ -814,14 +947,39 @@ def main():
         {"topPct": 2, "downloadsPerEp": 5840},
         {"topPct": 1, "downloadsPerEp": 11716},
     ]
-    exact_30d_count = sum(1 for e in megaphone_episodes if e["first30d"] is not None)
+    # Art19 episodes (post-migration, Sep 16 onward) feed the same benchmark
+    # alongside the Megaphone-era ones, screenshot-transcribed from Art19's
+    # Episode Comparison tool (see ART19_EPISODE_30DAY above). "confirmed"
+    # mirrors the Megaphone first30d/first7d distinction: True means the
+    # 30-day window has fully elapsed (a real final figure); False means
+    # it's a downloads-to-date lower bound for a window still in progress.
+    all_episode_values = [
+        (e["first30d"] if e["first30d"] is not None else e["first7d"], e["first30d"] is not None)
+        for e in megaphone_episodes
+    ] + [(e["downloads"], e["confirmed"]) for e in ART19_EPISODE_30DAY]
+    total_episode_count = len(all_episode_values)
+    exact_30d_count = sum(1 for _, exact in all_episode_values if exact)
     # Rounded to a whole number: the fractional digit implied false precision
     # for a figure that's already a blend of exact and lower-bound episodes.
-    our_blended_avg = round(
-        sum(e["first30d"] if e["first30d"] is not None else e["first7d"] for e in megaphone_episodes)
-        / len(megaphone_episodes)
-    )
+    our_blended_avg = round(sum(v for v, _ in all_episode_values) / total_episode_count)
+    # Lifetime-to-date average is Megaphone-only: Art19 episodes are all
+    # recent enough (and Art19 hasn't exposed a lifetime figure the way
+    # Megaphone's per-episode report does) that a "lifetime" number for them
+    # would just be their current 30-day-or-less figure, not a real lifetime
+    # total — mixing the two would understate it misleadingly.
     our_lifetime_avg = round(sum(e["downloadsToDate"] for e in megaphone_episodes) / len(megaphone_episodes), 1)
+    episode_chart = sorted(
+        [
+            {"title": e["title"], "value": e["first30d"], "source": "megaphone", "confirmed": True}
+            for e in megaphone_episodes
+            if e["first30d"] is not None
+        ]
+        + [
+            {"title": e["title"], "value": e["downloads"], "source": "art19", "confirmed": e["confirmed"]}
+            for e in ART19_EPISODE_30DAY
+        ],
+        key=lambda x: -x["value"],
+    )
     benchmark_rows = []
     inserted = False
     for b in benchmark_brackets:
@@ -851,6 +1009,11 @@ def main():
                 "spotify": spotify_downloads,
                 "other": other_downloads,
             },
+        },
+        "art19": {
+            "asOfDate": ART19_GEO_SCREENSHOT_DATE,
+            "geo": ART19_GEO,
+            "topEpisodesSinceMigration": ART19_TOP_EPISODES_SINCE_MIGRATION,
         },
         "spotify": {
             "streams": build_spotify_streams(),
@@ -896,6 +1059,9 @@ def main():
             "geo": youtube_geo,
             "audienceSegments": build_youtube_audience_segments(),
             "subscribersDaily": build_youtube_subscribers_daily(),
+            "clips": youtube_clips,
+            "clipHighlightTitle": stephen_miller_title,
+            "clipHighlightDaily": stephen_miller_daily,
         },
         "caveats": [
             "Different units, not interchangeable: Megaphone counts downloads, Apple/Spotify count plays, Spotify separately reports streams, YouTube counts views. These are not summed or directly compared as if identical.",
@@ -985,8 +1151,10 @@ def main():
             "rows": benchmark_rows,
             "ourBlendedAvg": our_blended_avg,
             "ourLifetimeAvg": our_lifetime_avg,
-            "ourEpisodeCount": len(megaphone_episodes),
+            "ourLifetimeEpisodeCount": len(megaphone_episodes),
+            "ourEpisodeCount": total_episode_count,
             "ourExact30dCount": exact_30d_count,
+            "episodeChart": episode_chart,
         },
     }
 
