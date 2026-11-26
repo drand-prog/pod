@@ -806,13 +806,17 @@ def main():
     daily_tab_total = sum(d["downloads"] for d in megaphone_daily if d["downloads"] is not None)
 
     # Combined daily-downloads series for the trend chart: the show migrated
-    # hosting platforms from Megaphone to Art19 in Sep 2026, so Megaphone's
-    # own daily export simply stops (last day: Sep 11) and Art19's own export
-    # picks up separately (first day: Sep 16) — a real ~4-day gap during the
-    # migration itself, filled with nulls like any other reporting gap
-    # rather than glossed over. Each point is tagged with its source so the
-    # frontend can render the two periods distinguishably rather than
-    # implying one continuous measurement spanning a platform switch.
+    # hosting platforms from Megaphone to Art19 in Sep 2026. Megaphone's own
+    # export doesn't stop cleanly at the cutover, though — a backfilled
+    # export (pulled during the migration itself, Jan 1-Sep 18) shows it
+    # kept counting real downloads for a few more days (legacy RSS
+    # subscribers still pointed at Megaphone's old feed URL, presumably),
+    # overlapping Art19's first few days (Sep 16-18) rather than leaving a
+    # gap. Megaphone's by-app Technology Performance report shows the same
+    # pattern continuing for months after (see megaphone_tech above), so
+    # this overlap is additive — two different, real audiences — not a
+    # double count of the same downloads; overlapping days are summed
+    # rather than one source silently overriding the other.
     art19_total = sum(r["downloads"] for r in art19_daily)
     art19_migration_date = art19_daily[0]["date"]
     mp_by_date = {d["date"]: d for d in megaphone_daily if d["downloads"] is not None}
@@ -820,16 +824,26 @@ def main():
     combined_dates = sorted(set(mp_by_date) | set(art19_by_date))
     combined_start = datetime.strptime(combined_dates[0], "%Y-%m-%d")
     combined_end = datetime.strptime(combined_dates[-1], "%Y-%m-%d")
+    overlap_dates = sorted(set(mp_by_date) & set(art19_by_date))
     combined_daily = []
     d = combined_start
     while d <= combined_end:
         iso = d.strftime("%Y-%m-%d")
-        if iso in mp_by_date:
-            row = mp_by_date[iso]
-            combined_daily.append({"date": iso, "downloads": row["downloads"], "reach": row["reach"], "source": "megaphone"})
-        elif iso in art19_by_date:
-            row = art19_by_date[iso]
-            combined_daily.append({"date": iso, "downloads": row["downloads"], "reach": row["listeners"], "source": "art19"})
+        mp_row = mp_by_date.get(iso)
+        art19_row = art19_by_date.get(iso)
+        if mp_row and art19_row:
+            combined_daily.append(
+                {
+                    "date": iso,
+                    "downloads": mp_row["downloads"] + art19_row["downloads"],
+                    "reach": mp_row["reach"] + art19_row["listeners"],
+                    "source": "both",
+                }
+            )
+        elif mp_row:
+            combined_daily.append({"date": iso, "downloads": mp_row["downloads"], "reach": mp_row["reach"], "source": "megaphone"})
+        elif art19_row:
+            combined_daily.append({"date": iso, "downloads": art19_row["downloads"], "reach": art19_row["listeners"], "source": "art19"})
         else:
             combined_daily.append({"date": iso, "downloads": None, "reach": None, "source": None})
         d += timedelta(days=1)
@@ -1120,7 +1134,13 @@ def main():
                 f"The show migrated hosting platforms from Megaphone to Art19 on {fmt_month_day(art19_migration_date)}, 2026. "
                 f"The daily downloads chart above combines both ({fmt(daily_tab_total)} Megaphone + {fmt(art19_total)} Art19 = {fmt(daily_tab_total + art19_total)} total), "
                 "tagged by source — not asserted to be identical methodology across the switch, just two platforms both reporting downloads. "
-                "The by-app breakdown, country/time-of-day breakdowns, and per-episode downloads panels are still Megaphone-only, frozen at their last export "
+                + (
+                    f"Megaphone kept reporting real downloads for a few days past the migration date, overlapping Art19's own first {len(overlap_dates)} days"
+                    f" ({fmt_month_day(overlap_dates[0])}–{fmt_month_day(overlap_dates[-1])}); those overlapping days are summed (both platforms were genuinely counting downloads), not one overriding the other. "
+                    if overlap_dates
+                    else ""
+                )
+                + "The by-app breakdown, country/time-of-day breakdowns, and per-episode downloads panels are still Megaphone-only, frozen at their last export "
                 f"({fmt_month_day(tech_end)}), since no Art19 equivalents exist yet — the \"Other platforms\" residual above reflects only that frozen Megaphone window, not downloads since the migration."
             ),
         ],

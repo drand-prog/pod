@@ -117,7 +117,7 @@
     <div class="panel-grid">
       <div class="chart-card">
         <h3>Daily downloads <span class="tag">trend</span></h3>
-        <div class="chart-sub">Downloads + reach/unique listeners, per day — darker line is Art19, lighter is the earlier Megaphone period</div>
+        <div class="chart-sub">Downloads + reach/unique listeners, per day — darker line is post-migration (Art19, plus a few overlapping days where Megaphone kept reporting too), lighter is the earlier Megaphone-only period</div>
         <canvas id="chart-megaphone-daily"></canvas>
       </div>
       <div class="chart-card">
@@ -440,7 +440,7 @@ if (DATA.notableEvents && DATA.notableEvents.length) {
 // ---------- Megaphone ----------
 (function renderMegaphone(){
   const daily = DATA.megaphone.daily;
-  const isArt19 = i => daily[i] && daily[i].source === 'art19';
+  const isArt19 = i => daily[i] && (daily[i].source === 'art19' || daily[i].source === 'both');
   new Chart(document.getElementById('chart-megaphone-daily'), {
     type: 'line',
     data: {
@@ -455,7 +455,13 @@ if (DATA.notableEvents && DATA.notableEvents.length) {
     options: {
       responsive:true, maintainAspectRatio:false,
       scales: { x: monthTickScale(), y:{beginAtZero:true, grid:{color:PALETTE.grid}} },
-      plugins:{legend:{position:'top', align:'end'}}
+      plugins:{
+        legend:{position:'top', align:'end'},
+        tooltip: { callbacks: { afterTitle: ctx => {
+          const src = daily[ctx[0].dataIndex] && daily[ctx[0].dataIndex].source;
+          return src === 'both' ? 'Megaphone + Art19 (both reporting during the migration)' : '';
+        } } },
+      }
     }
   });
 
