@@ -293,9 +293,13 @@ def build_megaphone_geo():
     """
     path = find_one("Megaphone_geolocation-performance-*.csv")
     rows = read_csv_rows(path)
-    total = sum(int(r["DOWNLOADS"]) for r in rows)
+    total = sum(int(r["DOWNLOADS"].replace(",", "")) for r in rows)
     out = [
-        {"country": r["Country"].strip(), "downloads": int(r["DOWNLOADS"]), "pct": round(int(r["DOWNLOADS"]) / total, 4)}
+        {
+            "country": r["Country"].strip(),
+            "downloads": int(r["DOWNLOADS"].replace(",", "")),
+            "pct": round(int(r["DOWNLOADS"].replace(",", "")) / total, 4),
+        }
         for r in rows
     ]
     out.sort(key=lambda d: -d["downloads"])
