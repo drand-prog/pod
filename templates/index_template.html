@@ -481,13 +481,16 @@ if (DATA.notableEvents && DATA.notableEvents.length) {
     const appEnd = new Date(DATA.periods.megaphoneAppReportEnd + 'T00:00:00Z');
     const fmtDate = d => d.toLocaleDateString('en-US', {month:'short', day:'numeric', timeZone:'UTC'});
     const gapDays = Math.round((dailyEnd - appEnd) / 86400000);
-    const gapNote = Math.abs(gapDays) <= 2
-      ? 'one extra day plus rounding'
-      : (gapDays < 0
-          ? "the daily-downloads tab hasn't been refreshed as recently as the app report"
-          : "the app report hasn't been refreshed as recently as the daily downloads");
     document.getElementById('megaphone-footnote').textContent =
-      `App report total ${fmt(DATA.megaphone.appReportTotal)} (through ${fmtDate(appEnd)}) vs. daily-tab total ${fmt(DATA.megaphone.dailyTabTotal)} (through ${fmtDate(dailyEnd)}) — ${gapNote}; the app-report total is used for the "Other platforms" residual, which reflects the app report's period, not the daily tab's.`;
+      (DATA.megaphone.appReportTotal === DATA.megaphone.dailyTabTotal && gapDays === 0)
+        ? `App report and daily-tab totals agree exactly: ${fmt(DATA.megaphone.appReportTotal)} through ${fmtDate(appEnd)} — the app-report total is used for the "Other platforms" residual.`
+        : `App report total ${fmt(DATA.megaphone.appReportTotal)} (through ${fmtDate(appEnd)}) vs. daily-tab total ${fmt(DATA.megaphone.dailyTabTotal)} (through ${fmtDate(dailyEnd)}) — ${
+            Math.abs(gapDays) <= 2
+              ? 'one extra day plus rounding'
+              : (gapDays < 0
+                  ? "the daily-downloads tab hasn't been refreshed as recently as the app report"
+                  : "the app report hasn't been refreshed as recently as the daily downloads")
+          }; the app-report total is used for the "Other platforms" residual, which reflects the app report's period, not the daily tab's.`;
   }
 
   const mgeo = DATA.megaphone.geo;

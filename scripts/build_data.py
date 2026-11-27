@@ -1132,19 +1132,24 @@ def main():
             f"“Other platforms” residual uses Megaphone's own per-app DOWNLOAD figures, not native play counts: Megaphone total ({fmt(app_report_total)}) − Apple downloads ({fmt(apple_downloads)}) − Spotify downloads ({fmt(spotify_downloads)}) = {fmt(other_downloads)}. This is the only valid basis for that residual.",
             "Snapshots vs. trends: only Megaphone daily downloads, Spotify daily streams/engagement, and Spotify WoW retention are true time series. Apple and YouTube figures are single point-in-time snapshots, shown as KPI cards / rank bars — not fabricated trend lines.",
             (
-                f"Two Megaphone totals differ: the app (Technology) report totals {fmt(app_report_total)} through "
-                f"{fmt_month_day(tech_end)}, while the daily-downloads tab totals {fmt(daily_tab_total)} through "
-                f"{fmt_month_day(daily_end)}"
-                + (
-                    " — one extra day plus rounding."
-                    if abs((datetime.strptime(daily_end, '%Y-%m-%d') - datetime.strptime(tech_end, '%Y-%m-%d')).days) <= 2
-                    else (
-                        ", because the daily-downloads tab hasn't been refreshed as recently as the app report."
-                        if datetime.strptime(tech_end, '%Y-%m-%d') > datetime.strptime(daily_end, '%Y-%m-%d')
-                        else ", because the app report hasn't been refreshed as recently as the daily downloads."
+                f"The app (Technology) report and the daily-downloads tab now agree exactly ({fmt(app_report_total)} through {fmt_month_day(tech_end)}, both reports) — "
+                "the app-report total is used for the \"Other\" residual below."
+                if app_report_total == daily_tab_total and tech_end == daily_end
+                else (
+                    f"Two Megaphone totals differ: the app (Technology) report totals {fmt(app_report_total)} through "
+                    f"{fmt_month_day(tech_end)}, while the daily-downloads tab totals {fmt(daily_tab_total)} through "
+                    f"{fmt_month_day(daily_end)}"
+                    + (
+                        " — one extra day plus rounding."
+                        if abs((datetime.strptime(daily_end, '%Y-%m-%d') - datetime.strptime(tech_end, '%Y-%m-%d')).days) <= 2
+                        else (
+                            ", because the daily-downloads tab hasn't been refreshed as recently as the app report."
+                            if datetime.strptime(tech_end, '%Y-%m-%d') > datetime.strptime(daily_end, '%Y-%m-%d')
+                            else ", because the app report hasn't been refreshed as recently as the daily downloads."
+                        )
                     )
+                    + " The app-report total is used for the “Other” residual, which reflects the app report's period, not the daily tab's."
                 )
-                + " The app-report total is used for the “Other” residual, which reflects the app report's period, not the daily tab's."
             ),
             f"YouTube's country breakdown only lists {len(youtube_geo['countries'])} countries totaling {fmt(sum(c['views'] for c in youtube_geo['countries']))} views, against a channel total of {fmt(youtube_geo['total']['views'] if youtube_geo['total'] else 0)} — YouTube Studio doesn't break out the long tail below its per-country reporting threshold, so the list is shown as-is rather than padded to 100%.",
             (
@@ -1152,8 +1157,9 @@ def main():
                 f"The daily downloads chart above combines both ({fmt(daily_tab_total)} Megaphone + {fmt(art19_total)} Art19 = {fmt(daily_tab_total + art19_total)} total), "
                 "tagged by source — not asserted to be identical methodology across the switch, just two platforms both reporting downloads. "
                 + (
-                    f"Megaphone kept reporting real downloads for a few days past the migration date, overlapping Art19's own first {len(overlap_dates)} days"
-                    f" ({fmt_month_day(overlap_dates[0])}–{fmt_month_day(overlap_dates[-1])}); those overlapping days are summed (both platforms were genuinely counting downloads), not one overriding the other. "
+                    f"Megaphone kept reporting a trickle of real downloads well past the migration date — likely legacy RSS subscribers still pointed at its old feed URL — "
+                    f"overlapping Art19's own reporting for {len(overlap_dates)} days so far ({fmt_month_day(overlap_dates[0])}–{fmt_month_day(overlap_dates[-1])}); "
+                    "those overlapping days are summed (both platforms were genuinely counting real, distinct downloads), not one overriding the other. "
                     if overlap_dates
                     else ""
                 )
