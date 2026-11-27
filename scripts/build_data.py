@@ -747,9 +747,25 @@ def build_youtube_videos():
     path = find_one("YouTube_TheMeltingPod_TableData_*.csv")
     rows = read_csv_rows(path)
     videos_by_title = {}
+    overview = None
     for r in rows:
+        if r["Content"].strip() == "Total":
+            # The channel-wide overview KPIs (videos + Shorts + everything
+            # else combined) live in this same export's Total row — using it
+            # instead of the Platform Summary workbook's hand-transcribed
+            # snapshot means these cards share the same full-lifetime period
+            # as the per-video table below, rather than quietly lagging it.
+            overview = {
+                "views": int(r["Views"]),
+                "watchTimeHours": float(r["Watch time (hours)"]),
+                "subscribersNet": int(r["Subscribers gained"]) - int(r["Subscribers lost"]),
+                "impressions": int(r["Thumbnail impressions"]),
+                "ctr": round(float(r["Thumbnail click-through rate (%)"]) / 100, 4),
+                "avgViewDuration": fmt_duration(sum(int(p) * 60**i for i, p in enumerate(reversed(r["Average view duration"].strip().split(":"))))),
+            }
+            continue
         title = r["Video title"].strip()
-        if r["Content"].strip() == "Total" or title not in CANONICAL_EPISODE_TITLES:
+        if title not in CANONICAL_EPISODE_TITLES:
             continue
         views = int(r["Views"]) if r["Views"].strip() else 0
         if title in videos_by_title and videos_by_title[title]["views"] >= views:
@@ -764,7 +780,7 @@ def build_youtube_videos():
             "ctr": round(float(r["Thumbnail click-through rate (%)"]) / 100, 4) if r["Thumbnail click-through rate (%)"].strip() else None,
         }
     videos = sorted(videos_by_title.values(), key=lambda v: -v["views"])
-    return {"videos": videos}, extract_date_range_from_filename(path)
+    return {"videos": videos, "overview": overview}, extract_date_range_from_filename(path)
 
 
 def build_youtube_traffic():
@@ -894,14 +910,12 @@ def main():
 
     periods = {
         "spotifyApple": "All-time",
-        # This is the Platform Summary's own YouTube period (overview KPI
-        # cards: views/watch time/subscribers/impressions) — a separate,
-        # still-unrefreshed xlsx snapshot. The per-video table, traffic
-        # sources, and country breakdown below now have their own more
-        # current periods (youtubeVideoTable/youtubeTraffic/youtubeGeoAsOf)
-        # from real full-lifetime CSV exports — deliberately not the same
-        # label, since they no longer cover the same window.
-        "youtube": "Jan 1 – Sep 2026",
+        # The overview KPI cards now come from the same full-lifetime Content
+        # export's Total row as the per-video table (see build_youtube_videos),
+        # so this period covers both. Only the Impressions->watch-time funnel
+        # panel is still on its own older xlsx snapshot (see its own chart-sub
+        # text) — YouTube Studio doesn't expose that breakdown any other way.
+        "youtube": fmt_period(*youtube_videos_range) if youtube_videos_range else None,
         "youtubeVideoTable": fmt_period(*youtube_videos_range) if youtube_videos_range else None,
         "youtubeTraffic": fmt_period(*youtube_traffic_range) if youtube_traffic_range else None,
         "megaphoneDaily": fmt_period(daily_start, daily_end),
@@ -1101,19 +1115,6 @@ def main():
             "topCities": build_apple_top_cities(wb),
         },
         "youtube": {
-            "overview": {
-                "views": metric("Plays / Streams / Views", "youtube"),
-                "watchTimeHours": metric("Listen / Watch time (hours)", "youtube"),
-                "subscribersNet": metric("Followers / Subscribers", "youtube"),
-                "impressions": metric("Impressions", "youtube"),
-                # Not available as their own Platform Summary cells — only
-                # mentioned in that row's prose Notes column, so these two
-                # stay hand-maintained constants rather than a fragile
-                # regex over free text. Updated from the Sep 2026 Traffic
-                # Sources export's Total row (blended across all sources).
-                "ctr": 0.0372,
-                "avgViewDuration": "4:52",
-            },
             **youtube_videos_data,
             "trafficSources": youtube_traffic,
             "funnel": build_youtube_funnel(wb),
