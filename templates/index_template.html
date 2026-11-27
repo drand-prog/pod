@@ -202,7 +202,7 @@
   </section>
 
   <section id="apple">
-    <h2><span class="platform-dot" style="background:var(--apple)"></span>Apple Podcasts <span class="period">— all-time</span></h2>
+    <h2><span class="platform-dot" style="background:var(--apple)"></span>Apple Podcasts <span class="period" id="apple-period"></span></h2>
     <div class="kpi-grid" id="apple-kpis"></div>
     <div class="platform-block panel-grid">
       <div class="chart-card">
@@ -357,6 +357,7 @@ function monthTickScale(extra) {
 document.getElementById('generated-at').textContent = DATA.generatedAt;
 document.getElementById('megaphone-period').textContent = '— ' + DATA.periods.downloadsCombined;
 document.getElementById('youtube-period').textContent = '— ' + DATA.periods.youtube;
+document.getElementById('apple-period').textContent = '— ' + DATA.periods.apple;
 
 // ---------- caveats ----------
 document.getElementById('caveats-list').innerHTML = DATA.caveats.map(c => `<li>${c}</li>`).join('');

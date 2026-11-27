@@ -909,7 +909,16 @@ def main():
     youtube_traffic, youtube_traffic_range = build_youtube_traffic()
 
     periods = {
-        "spotifyApple": "All-time",
+        "spotify": "All-time",
+        # Apple's own workbook notes pin this down: the Apple Top Cities
+        # sheet says "Full list from the Sep 2026 'See All' cities view",
+        # and Apple Episodes lists exactly 15 episodes (the pre-migration
+        # count) with the latest being the Sep 10-released one — so this
+        # snapshot was taken shortly after that, before the Art19-era
+        # episodes existed. Not "all-time" in the Spotify-trend-chart sense
+        # (continuously updated since launch): it's a frozen point-in-time
+        # pull that hasn't been refreshed since, missing 5 known episodes.
+        "apple": "Sep 2026 snapshot (not refreshed since — missing the 5 episodes released after Sep 10, 2026)",
         # The overview KPI cards now come from the same full-lifetime Content
         # export's Total row as the per-video table (see build_youtube_videos),
         # so this period covers both. Only the Impressions->watch-time funnel
@@ -964,12 +973,12 @@ def main():
             # section headers) silently left this table row on its original
             # "Jan 1 - Jul 14, 2026" text. Derive it from periods{} instead so
             # it can't drift from the section headers again.
-            row["spotify"] = periods["spotifyApple"]
-            row["apple"] = periods["spotifyApple"]
+            row["spotify"] = periods["spotify"]
+            row["apple"] = periods["apple"]
             row["youtube"] = periods["youtube"]
             row["notes"] = (
-                f"Spotify and Apple columns are all-time; YouTube is {periods['youtube']}; "
-                f"the Megaphone daily-downloads report covers {periods['megaphoneDaily']}. "
+                f"Spotify is all-time (continuously updated since launch); Apple is a {periods['apple']}; "
+                f"YouTube is {periods['youtube']}; the Megaphone daily-downloads report covers {periods['megaphoneDaily']}. "
                 "Different periods — cross-platform totals are not strictly comparable."
             )
         if row["metric"] == "Plays / Streams / Views":
@@ -978,6 +987,18 @@ def main():
             # a hand-copied figure — so a refresh of that export (new episodes,
             # accumulated plays) silently left this cell behind until now.
             row["spotify"] = sum(e["plays"] for e in spotify_episode_plays)
+            row["youtube"] = youtube_videos_data["overview"]["views"]
+        if row["metric"] == "Followers / Subscribers":
+            row["youtube"] = youtube_videos_data["overview"]["subscribersNet"]
+        if row["metric"] == "Listen / Watch time (hours)":
+            row["youtube"] = round(youtube_videos_data["overview"]["watchTimeHours"], 1)
+        if row["metric"] == "Impressions":
+            # Same reasoning as the three rows above: this table and the
+            # YouTube overview KPI cards both ultimately come from the same
+            # Content export's Total row now (see build_youtube_videos), so
+            # keep this cell's YouTube column tied to it directly rather than
+            # letting it drift back to the old xlsx snapshot on a refresh.
+            row["youtube"] = youtube_videos_data["overview"]["impressions"]
 
     def metric(name, col):
         """Look up one Platform Summary cell by metric label + platform column.
@@ -1128,7 +1149,7 @@ def main():
         },
         "caveats": [
             "Different units, not interchangeable: Megaphone counts downloads, Apple/Spotify count plays, Spotify separately reports streams, YouTube counts views. These are not summed or directly compared as if identical.",
-            f"Different time windows: Spotify & Apple figures are all-time; YouTube is {periods['youtube']}; Megaphone's daily-downloads tab covers {periods['megaphoneDaily']} and its app (Technology) report covers {periods['megaphoneAppReport']}. Periods are labeled throughout — no shared window is implied.",
+            f"Different time windows: Spotify figures are all-time (continuously updated); Apple is a {periods['apple']}; YouTube is {periods['youtube']}; Megaphone's daily-downloads tab covers {periods['megaphoneDaily']} and its app (Technology) report covers {periods['megaphoneAppReport']}. Periods are labeled throughout — no shared window is implied.",
             f"Plays ≠ downloads: Apple plays (~{fmt(apple_plays_header)}) exceed Megaphone's total downloads ({fmt(min(daily_tab_total, app_report_total))}–{fmt(max(daily_tab_total, app_report_total))}) because a play is a playback event (repeats included) while a download is one de-duplicated file request.",
             f"“Other platforms” residual uses Megaphone's own per-app DOWNLOAD figures, not native play counts: Megaphone total ({fmt(app_report_total)}) − Apple downloads ({fmt(apple_downloads)}) − Spotify downloads ({fmt(spotify_downloads)}) = {fmt(other_downloads)}. This is the only valid basis for that residual.",
             "Snapshots vs. trends: only Megaphone daily downloads, Spotify daily streams/engagement, and Spotify WoW retention are true time series. Apple and YouTube figures are single point-in-time snapshots, shown as KPI cards / rank bars — not fabricated trend lines.",
