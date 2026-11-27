@@ -152,6 +152,11 @@
         <div class="chart-sub">Downloads since the show moved to Art19 — not a lifetime figure for episodes released before the migration (see footnote above)</div>
         <canvas id="chart-art19-top-episodes"></canvas>
       </div>
+      <div class="chart-card">
+        <h3>Downloads by listening app <span class="tag snapshot">Art19 snapshot</span></h3>
+        <div class="chart-sub" id="art19-tech-sub">Since the show moved to Art19 — sits alongside the Megaphone-era chart above, not merged with it</div>
+        <canvas id="chart-art19-tech"></canvas>
+      </div>
     </div>
   </section>
 
@@ -434,7 +439,7 @@ if (DATA.notableEvents && DATA.notableEvents.length) {
     html += '</tr>';
   });
   html += '</tbody></table>';
-  html += `<p class="footnote">Hover a row for its full definition and source. "Other platforms" downloads = Megaphone total (${fmt(DATA.megaphone.otherResidual.total)}) − Apple downloads (${fmt(DATA.megaphone.otherResidual.apple)}) − Spotify downloads (${fmt(DATA.megaphone.otherResidual.spotify)}) = <strong>${fmt(DATA.megaphone.otherResidual.other)}</strong>. This uses Megaphone's own per-app download counts, not native play counts.</p>`;
+  html += `<p class="footnote">Hover a row for its full definition and source. "Other platforms" downloads = combined Megaphone + Art19 total (${fmt(DATA.megaphone.otherResidual.total)}) − Apple downloads (${fmt(DATA.megaphone.otherResidual.apple)}) − Spotify downloads (${fmt(DATA.megaphone.otherResidual.spotify)}) = <strong>${fmt(DATA.megaphone.otherResidual.other)}</strong>. This uses each platform's own per-app/per-technology download counts, not native play counts.</p>`;
   document.getElementById('summary-table-wrap').innerHTML = html;
 })();
 
@@ -530,7 +535,7 @@ if (DATA.notableEvents && DATA.notableEvents.length) {
   const art19 = DATA.art19;
   const migrationDateStr = new Date(DATA.periods.art19MigrationDate + 'T00:00:00Z').toLocaleDateString('en-US', {month:'short', day:'numeric', timeZone:'UTC'});
   document.getElementById('art19-footnote').textContent =
-    `As of ${DATA.periods.art19GeoAsOf}, transcribed from Art19's dashboard (no CSV export available for these two views). Figures are all-time-since-migration, not lifetime: for episodes released before the ${migrationDateStr} migration, Megaphone already counted their early-life downloads, so Art19's own count for those episodes badly understates their true lifetime total — only episodes released after the migration have a complete Art19 figure.`;
+    `As of ${DATA.periods.art19GeoAsOf}, transcribed from Art19's dashboard (no CSV export available for these three views). Figures are all-time-since-migration, not lifetime: for episodes released before the ${migrationDateStr} migration, Megaphone already counted their early-life downloads, so Art19's own count for those episodes badly understates their true lifetime total — only episodes released after the migration have a complete Art19 figure. The listening-app chart's own all-time total (its downloads add to a few more than the daily chart's Art19 total) is a small reconciliation gap between Art19's own exports, not an error.`;
 
   const art19GeoTop = art19.geo.slice(0, 10);
   document.getElementById('art19-geo-sub').textContent = `Top ${art19GeoTop.length} of ${art19.geo.length} countries by downloads since migration`;
@@ -546,6 +551,20 @@ if (DATA.notableEvents && DATA.notableEvents.length) {
     data: {
       labels: art19Eps.map(e => e.title.length > 28 ? e.title.slice(0, 27) + '…' : e.title),
       datasets: [{ label: 'Downloads since migration', data: art19Eps.map(e => e.downloads), backgroundColor: PALETTE.other }],
+    },
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: {legend: {display: false}}, scales: {x: {grid: {color: PALETTE.grid}}, y: {grid: {display: false}}} }
+  });
+
+  const art19TechTop = art19.technology.slice(0, 8);
+  const art19TechRest = art19.technology.slice(8).reduce((s, a) => s + a.downloads, 0);
+  const art19TechLabels = art19TechTop.map(a => a.app).concat(art19TechRest > 0 ? ['All other apps'] : []);
+  const art19TechValues = art19TechTop.map(a => a.downloads).concat(art19TechRest > 0 ? [art19TechRest] : []);
+  document.getElementById('art19-tech-sub').textContent = `Since the show moved to Art19 (${fmt(art19.technology.reduce((s,a)=>s+a.downloads,0))} downloads) — sits alongside the Megaphone-era chart above, not merged with it`;
+  new Chart(document.getElementById('chart-art19-tech'), {
+    type: 'bar',
+    data: {
+      labels: art19TechLabels,
+      datasets: [{ label: 'Downloads', data: art19TechValues, backgroundColor: art19TechLabels.map(l => l === 'Apple Podcasts' ? PALETTE.apple : l === 'Spotify' ? PALETTE.spotify : PALETTE.other) }],
     },
     options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: {legend: {display: false}}, scales: {x: {grid: {color: PALETTE.grid}}, y: {grid: {display: false}}} }
   });

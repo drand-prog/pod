@@ -616,6 +616,54 @@ ART19_TOP_EPISODES_SINCE_MIGRATION = [
     {"title": "Biden and the Border (Part 1), with Charanya Krishnaswami", "published": "2026-02-23", "downloads": 64, "pct": 0.0214},
 ]
 
+# Art19's "Platforms" view (Analytics -> Audience), "All Time" (i.e. since the
+# migration — Art19 has no data before it). The listening-app equivalent of
+# Megaphone's own Technology Performance report, which only sees downloads
+# still flowing through Megaphone's legacy feed URL — this is what's needed
+# to extend the "Other platforms" residual to cover the whole year rather
+# than just Megaphone's (incomplete, post-migration) side of it. Screenshot's
+# own total (2,990) is a few downloads off the Art19 daily-chart total (2,984)
+# — same small reconciliation gap seen elsewhere between two exports of
+# Art19 data, not an error worth chasing further.
+ART19_TECHNOLOGY = [
+    {"app": "Apple Podcasts", "downloads": 1788},
+    {"app": "Spotify", "downloads": 459},
+    {"app": "Chrome", "downloads": 171},
+    {"app": "Overcast", "downloads": 132},
+    {"app": "Pocket Casts", "downloads": 100},
+    {"app": "Stagefright", "downloads": 48},
+    {"app": "AppleCoreMedia", "downloads": 36},
+    {"app": "Edge", "downloads": 33},
+    {"app": "Podcast Addict", "downloads": 28},
+    {"app": "Downcast", "downloads": 27},
+    {"app": "AntennaPod", "downloads": 23},
+    {"app": "Podcasts", "downloads": 19},
+    {"app": "Safari", "downloads": 17},
+    {"app": "Amazon Music", "downloads": 12},
+    {"app": "Podbean", "downloads": 11},
+    {"app": "Player", "downloads": 10},
+    {"app": "Podcast Republic", "downloads": 9},
+    {"app": "Firefox", "downloads": 7},
+    {"app": "Castbox", "downloads": 6},
+    {"app": "PodEngine", "downloads": 5},
+    {"app": "Podzone", "downloads": 5},
+    {"app": "WordPress.com", "downloads": 5},
+    {"app": "AirPodcasts", "downloads": 4},
+    {"app": "ThePodcastApp", "downloads": 4},
+    {"app": "fm.castbox.audiobook.radio.podcast", "downloads": 4},
+    {"app": "iTunes", "downloads": 4},
+    {"app": "podclone-bot", "downloads": 4},
+    {"app": "python-httpx", "downloads": 4},
+    {"app": "Amazon Echo", "downloads": 3},
+    {"app": "OrcaBackfill", "downloads": 3},
+    {"app": "Podscribe", "downloads": 3},
+    {"app": "AudioAgiPodcastStereoProbe", "downloads": 2},
+    {"app": "Earshot", "downloads": 1},
+    {"app": "Google Home", "downloads": 1},
+    {"app": "Google Podcasts", "downloads": 1},
+    {"app": "Opera", "downloads": 1},
+]
+
 # From Art19's "Episode Comparison" tool: true 30-day-since-release downloads,
 # usable for the cross-platform benchmark only for episodes released after the
 # Sep 16 migration (pre-migration episodes' Art19 downloads are truncated —
@@ -891,6 +939,22 @@ def main():
         )
     other_downloads = app_report_total - apple_downloads - spotify_downloads
 
+    # Combined-era version of the same breakdown: Megaphone's Technology
+    # Performance report only ever sees the share of downloads still flowing
+    # through its own legacy feed URL post-migration, so using it alone for
+    # the whole year understates "Other platforms" by missing every app-level
+    # download that moved to Art19's new feed. Art19's own "Platforms" view
+    # (ART19_TECHNOLOGY) covers that gap — summed by app name with Megaphone's
+    # (the two never overlap in time, same as the daily downloads chart).
+    art19_tech_total = sum(a["downloads"] for a in ART19_TECHNOLOGY)
+    combined_tech_totals = {}
+    for a in megaphone_tech + ART19_TECHNOLOGY:
+        combined_tech_totals[a["app"]] = combined_tech_totals.get(a["app"], 0) + a["downloads"]
+    combined_tech_total = sum(combined_tech_totals.values())
+    combined_apple_downloads = combined_tech_totals.get("Apple Podcasts", 0)
+    combined_spotify_downloads = combined_tech_totals.get("Spotify", 0)
+    combined_other_downloads = combined_tech_total - combined_apple_downloads - combined_spotify_downloads
+
     spotify_age_gender, age_gender_range = build_spotify_age_gender()
     spotify_episode_plays, episode_plays_asof = build_spotify_episode_plays()
     spotify_geo, spotify_geo_asof = build_spotify_geo()
@@ -959,13 +1023,29 @@ def main():
     platform_summary = build_platform_summary(wb)
     for row in platform_summary:
         if row["metric"] == "Downloads by app (Megaphone, IAB)":
-            # Megaphone's own per-app download report is the authoritative
-            # source for this row (see the "Other platforms" caveat below) —
-            # override whatever was last hand-transcribed into the workbook
-            # so this row always matches the fresh CSVs.
-            row["spotify"] = spotify_downloads
-            row["apple"] = apple_downloads
-            row["other"] = other_downloads
+            # Megaphone's own per-app download report was the sole source for
+            # this row, but Megaphone-only is now a full year of undercounting
+            # the post-migration period (its own Technology Performance report
+            # only ever sees the legacy-feed trickle, not the much larger
+            # volume that moved to Art19 — see ART19_TECHNOLOGY above). This
+            # row's own "Notes" text was also still a hardcoded leftover
+            # (9,632/6,200/1,003/2,429, from some earlier revision) rather
+            # than ever being derived — replaced along with the values.
+            row["metric"] = "Downloads by app (Megaphone + Art19)"
+            row["spotify"] = combined_spotify_downloads
+            row["apple"] = combined_apple_downloads
+            row["other"] = combined_other_downloads
+            row["notes"] = (
+                "IAB / Megaphone 'Download' = \"a unique file request that was downloaded\" (complete or "
+                "partial), de-duplicated by IP + user agent within 24h; Art19 reports its own equivalent "
+                "concept, not independently verified to match IAB's exact methodology. These are each "
+                "platform's own per-app/per-technology download counts, combined across the Megaphone era and "
+                "the Art19 era since migration (they never overlap in time — see the daily downloads chart's "
+                "migration caveat). 'Other platforms' = combined total "
+                f"({fmt(combined_tech_total)}) − Apple ({fmt(combined_apple_downloads)}) − Spotify "
+                f"({fmt(combined_spotify_downloads)}) = {fmt(combined_other_downloads)} (Chrome, Overcast, "
+                "Safari, Pocket Casts, and the long tail). Megaphone excludes YouTube."
+            )
         if row["metric"] == "Reporting period":
             # Same staleness problem as the row above, just undiscovered until
             # now: this row is hand-transcribed free text, so refreshing
@@ -1101,16 +1181,20 @@ def main():
             "geo": megaphone_geo,
             "timeOfDay": megaphone_time_of_day,
             "otherResidual": {
-                "total": app_report_total,
-                "apple": apple_downloads,
-                "spotify": spotify_downloads,
-                "other": other_downloads,
+                "total": combined_tech_total,
+                "apple": combined_apple_downloads,
+                "spotify": combined_spotify_downloads,
+                "other": combined_other_downloads,
             },
         },
         "art19": {
             "asOfDate": ART19_GEO_SCREENSHOT_DATE,
             "geo": ART19_GEO,
             "topEpisodesSinceMigration": ART19_TOP_EPISODES_SINCE_MIGRATION,
+            "technology": sorted(
+                [{"app": a["app"], "downloads": a["downloads"], "pct": round(a["downloads"] / art19_tech_total, 4)} for a in ART19_TECHNOLOGY],
+                key=lambda a: -a["downloads"],
+            ),
         },
         "spotify": {
             "streams": build_spotify_streams(),
@@ -1157,11 +1241,11 @@ def main():
                 else f"{fmt(min(daily_tab_total, app_report_total))}–{fmt(max(daily_tab_total, app_report_total))}"
             )
             + ") because a play is a playback event (repeats included) while a download is one de-duplicated file request.",
-            f"“Other platforms” residual uses Megaphone's own per-app DOWNLOAD figures, not native play counts: Megaphone total ({fmt(app_report_total)}) − Apple downloads ({fmt(apple_downloads)}) − Spotify downloads ({fmt(spotify_downloads)}) = {fmt(other_downloads)}. This is the only valid basis for that residual.",
+            f"“Other platforms” residual uses each platform's own per-app/per-technology DOWNLOAD figures, not native play counts, combined across the Megaphone era and the Art19 era since migration: combined total ({fmt(combined_tech_total)}) − Apple downloads ({fmt(combined_apple_downloads)}) − Spotify downloads ({fmt(combined_spotify_downloads)}) = {fmt(combined_other_downloads)}. (Megaphone-only: {fmt(app_report_total)} total, {fmt(other_downloads)} other — see below for why the combined figure is used instead.)",
             "Snapshots vs. trends: only Megaphone daily downloads, Spotify daily streams/engagement, and Spotify WoW retention are true time series. Apple and YouTube figures are single point-in-time snapshots, shown as KPI cards / rank bars — not fabricated trend lines.",
             (
                 f"The app (Technology) report and the daily-downloads tab now agree exactly ({fmt(app_report_total)} through {fmt_month_day(tech_end)}, both reports) — "
-                "the app-report total is used for the \"Other\" residual below."
+                "that Megaphone-only figure, plus Art19's own Platforms breakdown, is combined for the \"Other\" residual below."
                 if app_report_total == daily_tab_total and tech_end == daily_end
                 else (
                     f"Two Megaphone totals differ: the app (Technology) report totals {fmt(app_report_total)} through "
@@ -1176,7 +1260,7 @@ def main():
                             else ", because the app report hasn't been refreshed as recently as the daily downloads."
                         )
                     )
-                    + " The app-report total is used for the “Other” residual, which reflects the app report's period, not the daily tab's."
+                    + " The app-report total, plus Art19's own Platforms breakdown, is combined for the “Other” residual."
                 )
             ),
             f"YouTube's country breakdown only lists {len(youtube_geo['countries'])} countries totaling {fmt(sum(c['views'] for c in youtube_geo['countries']))} views, against a channel total of {fmt(youtube_geo['total']['views'] if youtube_geo['total'] else 0)} — YouTube Studio doesn't break out the long tail below its per-country reporting threshold, so the list is shown as-is rather than padded to 100%.",
@@ -1191,8 +1275,10 @@ def main():
                     if overlap_dates
                     else ""
                 )
-                + "The by-app breakdown, country/time-of-day breakdowns, and per-episode downloads panels are still Megaphone-only, frozen at their last export "
-                f"({fmt_month_day(tech_end)}), since no Art19 equivalents exist yet — the \"Other platforms\" residual above reflects only that frozen Megaphone window, not downloads since the migration."
+                + "The country/time-of-day breakdowns and per-episode downloads panels are still Megaphone-only, frozen at their last export "
+                f"({fmt_month_day(tech_end)}), since no Art19 equivalents exist yet. The by-app breakdown chart is the same — but the \"Other platforms\" "
+                "residual in the Platform Summary table above is not: it now combines Megaphone's Technology Performance report with Art19's own "
+                "Platforms breakdown (screenshot-transcribed, since Art19 offers no CSV export for that view), covering the whole year across both eras."
             ),
         ],
         "sources": [
