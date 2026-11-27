@@ -1150,7 +1150,13 @@ def main():
         "caveats": [
             "Different units, not interchangeable: Megaphone counts downloads, Apple/Spotify count plays, Spotify separately reports streams, YouTube counts views. These are not summed or directly compared as if identical.",
             f"Different time windows: Spotify figures are all-time (continuously updated); Apple is a {periods['apple']}; YouTube is {periods['youtube']}; Megaphone's daily-downloads tab covers {periods['megaphoneDaily']} and its app (Technology) report covers {periods['megaphoneAppReport']}. Periods are labeled throughout — no shared window is implied.",
-            f"Plays ≠ downloads: Apple plays (~{fmt(apple_plays_header)}) exceed Megaphone's total downloads ({fmt(min(daily_tab_total, app_report_total))}–{fmt(max(daily_tab_total, app_report_total))}) because a play is a playback event (repeats included) while a download is one de-duplicated file request.",
+            f"Plays ≠ downloads: Apple plays (~{fmt(apple_plays_header)}) exceed Megaphone's total downloads ("
+            + (
+                fmt(app_report_total)
+                if daily_tab_total == app_report_total
+                else f"{fmt(min(daily_tab_total, app_report_total))}–{fmt(max(daily_tab_total, app_report_total))}"
+            )
+            + ") because a play is a playback event (repeats included) while a download is one de-duplicated file request.",
             f"“Other platforms” residual uses Megaphone's own per-app DOWNLOAD figures, not native play counts: Megaphone total ({fmt(app_report_total)}) − Apple downloads ({fmt(apple_downloads)}) − Spotify downloads ({fmt(spotify_downloads)}) = {fmt(other_downloads)}. This is the only valid basis for that residual.",
             "Snapshots vs. trends: only Megaphone daily downloads, Spotify daily streams/engagement, and Spotify WoW retention are true time series. Apple and YouTube figures are single point-in-time snapshots, shown as KPI cards / rank bars — not fabricated trend lines.",
             (
