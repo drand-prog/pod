@@ -1060,9 +1060,10 @@ def main():
             # blanked further below rather than shown as stale. The one
             # Apple cell that *is* inferable (downloads, via the app
             # attributed to "Apple Podcasts" in Megaphone+Art19's combined
-            # breakdown) covers the full year, so this row describes that
-            # instead of the old snapshot-wide claim.
-            row["apple"] = f"Downloads only: {periods['megaphoneAppReport']} (Megaphone + Art19); other Apple metrics removed — see notes"
+            # breakdown) covers the full year, so this cell shows that period
+            # directly; the "downloads only" caveat itself lives in the
+            # table's fine print below instead of crowding this cell.
+            row["apple"] = periods["megaphoneAppReport"]
             row["youtube"] = periods["youtube"]
             row["notes"] = (
                 "Spotify is all-time (continuously updated since launch); Apple's downloads figure below is "

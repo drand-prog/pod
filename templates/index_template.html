@@ -439,7 +439,7 @@ if (DATA.notableEvents && DATA.notableEvents.length) {
     html += '</tr>';
   });
   html += '</tbody></table>';
-  html += `<p class="footnote">Hover a row for its full definition and source. "Other platforms" downloads = combined Megaphone + Art19 total (${fmt(DATA.megaphone.otherResidual.total)}) − Apple downloads (${fmt(DATA.megaphone.otherResidual.apple)}) − Spotify downloads (${fmt(DATA.megaphone.otherResidual.spotify)}) = <strong>${fmt(DATA.megaphone.otherResidual.other)}</strong>. This uses each platform's own per-app/per-technology download counts, not native play counts.</p>`;
+  html += `<p class="footnote">Hover a row for its full definition and source. "Other platforms" downloads = combined Megaphone + Art19 total (${fmt(DATA.megaphone.otherResidual.total)}) − Apple downloads (${fmt(DATA.megaphone.otherResidual.apple)}) − Spotify downloads (${fmt(DATA.megaphone.otherResidual.spotify)}) = <strong>${fmt(DATA.megaphone.otherResidual.other)}</strong>. This uses each platform's own per-app/per-technology download counts, not native play counts. Downloads only: ${DATA.periods.megaphoneAppReport} (Megaphone + Art19); other Apple metrics removed — see notes.</p>`;
   document.getElementById('summary-table-wrap').innerHTML = html;
 })();
 
