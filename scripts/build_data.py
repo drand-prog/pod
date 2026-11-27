@@ -1054,12 +1054,23 @@ def main():
             # "Jan 1 - Jul 14, 2026" text. Derive it from periods{} instead so
             # it can't drift from the section headers again.
             row["spotify"] = periods["spotify"]
-            row["apple"] = periods["apple"]
+            # Every other Apple cell in this table is a frozen Sep 2026
+            # snapshot with no Megaphone/Art19 equivalent (downloads-by-app
+            # can't infer plays, followers, or engagement) — those are
+            # blanked further below rather than shown as stale. The one
+            # Apple cell that *is* inferable (downloads, via the app
+            # attributed to "Apple Podcasts" in Megaphone+Art19's combined
+            # breakdown) covers the full year, so this row describes that
+            # instead of the old snapshot-wide claim.
+            row["apple"] = f"Downloads only: {periods['megaphoneAppReport']} (Megaphone + Art19); other Apple metrics removed — see notes"
             row["youtube"] = periods["youtube"]
             row["notes"] = (
-                f"Spotify is all-time (continuously updated since launch); Apple is a {periods['apple']}; "
-                f"YouTube is {periods['youtube']}; the Megaphone daily-downloads report covers {periods['megaphoneDaily']}. "
-                "Different periods — cross-platform totals are not strictly comparable."
+                "Spotify is all-time (continuously updated since launch); Apple's downloads figure below is "
+                "full-year (via Megaphone + Art19's combined per-app breakdown — see the \"Downloads by app\" row), "
+                f"but every other Apple metric is a {periods['apple']} with no Megaphone/Art19 equivalent, so those "
+                f"cells are blank rather than stale; YouTube is {periods['youtube']}; the Megaphone daily-downloads "
+                f"report covers {periods['megaphoneDaily']}. Different periods — cross-platform totals are not "
+                "strictly comparable."
             )
         if row["metric"] == "Plays / Streams / Views":
             # Same staleness class again: this Spotify cell is meant to be the
@@ -1345,6 +1356,25 @@ def main():
             "episodeChart": episode_chart,
         },
     }
+
+    # Blank the Platform Summary's other stale Apple cells now that the
+    # Apple section's own overview (above, via metric()) has already
+    # captured their real Sep-2026-snapshot values — this only changes what
+    # this one table displays. None of these metrics have a Megaphone/Art19
+    # equivalent (a download count can't infer plays, followers, listeners,
+    # engagement, or watch time), unlike the "Downloads by app" row just
+    # above, which is why that row alone keeps a real (and full-year) number.
+    for row in platform_summary:
+        if row["metric"].strip() in {
+            "Followers / Subscribers",
+            "Plays / Streams / Views",
+            "Listeners (unique)",
+            "Engaged listeners",
+            "Listen / Watch time (hours)",
+            "— of which Following (Apple)",
+            "— of which Not following (Apple)",
+        }:
+            row["apple"] = "—"
 
     template = TEMPLATE_PATH.read_text(encoding="utf-8")
     json_blob = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
