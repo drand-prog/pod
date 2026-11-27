@@ -1053,7 +1053,19 @@ def main():
             # section headers) silently left this table row on its original
             # "Jan 1 - Jul 14, 2026" text. Derive it from periods{} instead so
             # it can't drift from the section headers again.
-            row["spotify"] = periods["spotify"]
+            # "Jan 1" elsewhere on the page is just the safe query-start date
+            # used when pulling full-history exports, not a claim that
+            # activity began then. The real first-activity dates, checked
+            # directly against the raw data: Spotify and YouTube both show
+            # their first real numbers on Feb 22, 2026 (matching the Feb 22
+            # YouTube upload date); Megaphone shows 2 downloads on Feb 13,
+            # 2026 — 10 days before the Feb 23 official episode-publish date
+            # in its own episode metadata, almost certainly pre-launch test
+            # traffic rather than real audience activity. Treated as noise:
+            # this row uses Feb 22 uniformly rather than making Megaphone's
+            # column inconsistent with the other three over a 2-download blip.
+            launch_date = "2026-02-22"
+            row["spotify"] = fmt_period(launch_date, tech_end)
             # Every other Apple cell in this table is a frozen Sep 2026
             # snapshot with no Megaphone/Art19 equivalent (downloads-by-app
             # can't infer plays, followers, or engagement) — those are
@@ -1063,14 +1075,16 @@ def main():
             # breakdown) covers the full year, so this cell shows that period
             # directly; the "downloads only" caveat itself lives in the
             # table's fine print below instead of crowding this cell.
-            row["apple"] = periods["megaphoneAppReport"]
-            row["youtube"] = periods["youtube"]
+            row["apple"] = fmt_period(launch_date, tech_end)
+            row["youtube"] = fmt_period(launch_date, tech_end)
             row["notes"] = (
-                "Spotify is all-time (continuously updated since launch); Apple's downloads figure below is "
-                "full-year (via Megaphone + Art19's combined per-app breakdown — see the \"Downloads by app\" row), "
-                f"but every other Apple metric is a {periods['apple']} with no Megaphone/Art19 equivalent, so those "
-                f"cells are blank rather than stale; YouTube is {periods['youtube']}; the Megaphone daily-downloads "
-                f"report covers {periods['megaphoneDaily']}. Different periods — cross-platform totals are not "
+                f"All three use the show's real first-activity date ({fmt_month_day(launch_date)}), not Jan 1 "
+                "(just the safe query-start date for full-history exports). Megaphone's own raw export actually "
+                "shows 2 downloads on Feb 13 — 10 days before the Feb 23 episode-publish date in its own episode "
+                f"metadata — treated as pre-launch test noise rather than real activity. Apple's downloads figure "
+                "is full-year (via Megaphone + Art19's combined per-app breakdown — see the \"Downloads by app\" "
+                f"row), but every other Apple metric is a {periods['apple']} with no Megaphone/Art19 equivalent, so "
+                "those cells are blank rather than stale. Different periods — cross-platform totals are not "
                 "strictly comparable."
             )
         if row["metric"] == "Plays / Streams / Views":
